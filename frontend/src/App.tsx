@@ -1,122 +1,114 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import React, { useState } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { Navbar } from './components/Navbar';
+import { LoginModal } from './components/LoginModal';
+import { RegisterModal } from './components/RegisterModal';
+import { ForgotPasswordModal } from './components/ForgotPasswordModal';
+import { IdentityVerificationModal } from './components/IdentityVerificationModal';
+import { HostOnboardingModal } from './components/HostOnboardingModal';
+import { StayFinderLanding } from './components/StayFinderLanding';
+import { ProfileView } from './components/ProfileView';
+import { HostDashboardView } from './components/HostDashboardView';
+import { AdminManagementView } from './components/AdminManagementView';
+import './App.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+const MainContent: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  const [currentView, setCurrentView] = useState<string>('explore');
+
+  // Modals state
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isForgotOpen, setIsForgotOpen] = useState(false);
+  const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
+  const [isHostOnboardingOpen, setIsHostOnboardingOpen] = useState(false);
+
+  // If unauthenticated and on protected view, fall back to explore
+  React.useEffect(() => {
+    if (!isAuthenticated && currentView !== 'explore') {
+      setCurrentView('explore');
+    }
+  }, [isAuthenticated, currentView]);
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="app-shell">
+      <Navbar
+        currentView={currentView}
+        setCurrentView={setCurrentView}
+        onOpenLogin={() => setIsLoginOpen(true)}
+        onOpenRegister={() => setIsRegisterOpen(true)}
+        onOpenIdentityModal={() => setIsIdentityModalOpen(true)}
+        onOpenHostOnboarding={() => setIsHostOnboardingOpen(true)}
+      />
 
-      <div className="ticks"></div>
+      <main className="main-content">
+        {currentView === 'explore' && (
+          <StayFinderLanding
+            onOpenLogin={() => setIsLoginOpen(true)}
+            onOpenRegister={() => setIsRegisterOpen(true)}
+            onGoToProfile={() => setCurrentView('profile')}
+          />
+        )}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {currentView === 'profile' && isAuthenticated && <ProfileView />}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        {currentView === 'host-portal' && isAuthenticated && (
+          <HostDashboardView onOpenIdentityModal={() => setIsIdentityModalOpen(true)} />
+        )}
+
+        {currentView === 'admin-portal' && isAuthenticated && <AdminManagementView />}
+      </main>
+
+      <footer className="footer">
+        <div className="footer-content">
+          <p>© {new Date().getFullYear()} StayFinder, Inc. All rights reserved.</p>
+          <div className="footer-links">
+            <span>Privacy</span>
+            <span>Terms</span>
+            <span>Sitemap</span>
+            <span>Company details</span>
+          </div>
+        </div>
+      </footer>
+
+      {/* Auth & Feature Modals */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setIsLoginOpen(false)}
+        onSwitchToRegister={() => setIsRegisterOpen(true)}
+        onSwitchToForgot={() => setIsForgotOpen(true)}
+      />
+
+      <RegisterModal
+        isOpen={isRegisterOpen}
+        onClose={() => setIsRegisterOpen(false)}
+        onSwitchToLogin={() => setIsLoginOpen(true)}
+      />
+
+      <ForgotPasswordModal
+        isOpen={isForgotOpen}
+        onClose={() => setIsForgotOpen(false)}
+        onSwitchToLogin={() => setIsLoginOpen(true)}
+      />
+
+      <IdentityVerificationModal
+        isOpen={isIdentityModalOpen}
+        onClose={() => setIsIdentityModalOpen(false)}
+      />
+
+      <HostOnboardingModal
+        isOpen={isHostOnboardingOpen}
+        onClose={() => setIsHostOnboardingOpen(false)}
+        onSuccess={() => setCurrentView('host-portal')}
+      />
+    </div>
+  );
+};
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainContent />
+    </AuthProvider>
+  );
 }
-
-export default App
