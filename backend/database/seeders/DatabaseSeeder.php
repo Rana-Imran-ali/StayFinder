@@ -26,5 +26,10 @@ class DatabaseSeeder extends Seeder
         foreach ($roles as $roleData) {
             Role::firstOrCreate(['slug' => $roleData['slug']], $roleData);
         }
+
+        // Seed platform amenities catalog
+        $this->call([
+            AmenitySeeder::class,
+        ]);
     }
 }

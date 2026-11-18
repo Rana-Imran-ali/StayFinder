@@ -88,6 +88,11 @@ class User extends Authenticatable
         return $this->hasMany(PayoutMethod::class);
     }
 
+    public function properties(): HasMany
+    {
+        return $this->hasMany(Property::class, 'host_id');
+    }
+
     public function adminLogs(): HasMany
     {
         return $this->hasMany(AdminActivityLog::class, 'admin_id');

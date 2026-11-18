@@ -1,69 +1,106 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Search, MapPin, Calendar, Users, Star, Heart } from 'lucide-react';
+import { propertyApi } from '../services/propertyApi';
+import { locationApi } from '../services/locationApi';
+import type { Property, PropertyFilterParams } from '../types/property';
+import type { City } from '../types/location';
+import { PropertyCard } from './PropertyCard';
+import { PropertyFiltersBar } from './PropertyFiltersBar';
+import { MapPropertyViewer } from './MapPropertyViewer';
+import { HeroSearchBar } from './HeroSearchBar';
+import {
+  Loader2,
+  Building2,
+  Map,
+  LayoutGrid,
+  Sparkles,
+} from 'lucide-react';
 
 interface StayFinderLandingProps {
   onOpenLogin: () => void;
   onOpenRegister: () => void;
   onGoToProfile: () => void;
+  onSelectProperty?: (property: Property) => void;
 }
-
-const FEATURED_STAYS = [
-  {
-    id: 1,
-    title: 'Cliffside Oceanfront Villa',
-    location: 'Amalfi Coast, Italy',
-    price: 340,
-    rating: 4.98,
-    reviews: 124,
-    image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-    tag: 'Superhost',
-  },
-  {
-    id: 2,
-    title: 'Modern Alpine Glass Cabin',
-    location: 'Zermatt, Switzerland',
-    price: 285,
-    rating: 4.95,
-    reviews: 89,
-    image: 'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=800&q=80',
-    tag: 'Rare Find',
-  },
-  {
-    id: 3,
-    title: 'Santorini Sunset Cave Suite',
-    location: 'Oia, Greece',
-    price: 420,
-    rating: 5.0,
-    reviews: 215,
-    image: 'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=800&q=80',
-    tag: 'Guest Favorite',
-  },
-  {
-    id: 4,
-    title: 'Kyoto Bamboo Garden Ryokan',
-    location: 'Kyoto, Japan',
-    price: 195,
-    rating: 4.92,
-    reviews: 74,
-    image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
-    tag: 'Top Rated',
-  },
-];
 
 export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
   onOpenLogin,
   onOpenRegister,
   onGoToProfile,
+  onSelectProperty,
 }) => {
   const { user, isAuthenticated } = useAuth();
-  const [location, setLocation] = useState('');
-  const [savedStays, setSavedStays] = useState<number[]>([]);
+  const [searchLocation, setSearchLocation] = useState('');
+  const [filterParams, setFilterParams] = useState<PropertyFilterParams>({});
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [popularCities, setPopularCities] = useState<City[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
+  const [loading, setLoading] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
 
-  const toggleFavorite = (id: number) => {
-    setSavedStays((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  // Fetch properties whenever filter params change
+  useEffect(() => {
+    fetchProperties(filterParams);
+  }, [filterParams]);
+
+  // Load popular destinations once
+  useEffect(() => {
+    locationApi.getPopularDestinations().then((res) => {
+      if (res.data) setPopularCities(res.data);
+    }).catch(() => {});
+  }, []);
+
+  const fetchProperties = async (params: PropertyFilterParams) => {
+    try {
+      setLoading(true);
+      const res = await propertyApi.getProperties(params);
+      if (res.success && res.data) {
+        setProperties(res.data.data);
+        setTotalCount(res.data.total);
+      } else {
+        setProperties([]);
+        setTotalCount(0);
+      }
+    } catch (err: any) {
+      console.warn('Could not load properties from backend:', err);
+      setProperties([]);
+      setTotalCount(0);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleHeroSearchBarSearch = (params: {
+    search?: string;
+    country_id?: number;
+    state_id?: number;
+    city_id?: number;
+    checkIn?: string;
+    checkOut?: string;
+    guests?: number;
+  }) => {
+    setFilterParams((prev) => ({
+      ...prev,
+      search: params.search,
+      country_id: params.country_id,
+      state_id: params.state_id,
+      city_id: params.city_id,
+      guests: params.guests,
+      page: 1,
+    }));
+  };
+
+  const handleFilterChange = (newParams: PropertyFilterParams) => {
+    setFilterParams(newParams);
+  };
+
+  const handleCityQuickSelect = (city: City) => {
+    setFilterParams((prev) => ({
+      ...prev,
+      country_id: city.country_id,
+      city_id: city.id,
+      search: undefined,
+    }));
   };
 
   return (
@@ -76,46 +113,30 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
             Discover unique homes, beachfront villas, and cozy mountain cabins around the globe.
           </p>
 
-          {/* Quick Search Widget */}
-          <div className="search-bar-widget">
-            <div className="search-field">
-              <MapPin className="search-icon" size={18} />
-              <div className="search-text">
-                <span className="search-label">Where</span>
-                <input
-                  type="text"
-                  placeholder="Search destinations"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                />
-              </div>
+          {/* User-Friendly Interactive Search Widget */}
+          <HeroSearchBar
+            onSearch={handleHeroSearchBarSearch}
+            initialSearch={searchLocation}
+          />
+
+          {/* Popular Destinations Quick Chips */}
+          {popularCities.length > 0 && (
+            <div className="popular-destinations-bar flex items-center justify-center gap-2 mt-4 flex-wrap">
+              <span className="text-xs text-white/80 font-medium flex items-center gap-1">
+                <Sparkles size={13} className="text-amber-300" /> Popular:
+              </span>
+              {popularCities.slice(0, 6).map((city) => (
+                <button
+                  key={city.id}
+                  type="button"
+                  className="px-2.5 py-1 rounded-full text-xs bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-colors border border-white/20"
+                  onClick={() => handleCityQuickSelect(city)}
+                >
+                  {city.name}, {city.country?.code}
+                </button>
+              ))}
             </div>
-
-            <div className="search-divider" />
-
-            <div className="search-field">
-              <Calendar className="search-icon" size={18} />
-              <div className="search-text">
-                <span className="search-label">Check in – Check out</span>
-                <input type="text" placeholder="Add dates" readOnly />
-              </div>
-            </div>
-
-            <div className="search-divider" />
-
-            <div className="search-field">
-              <Users className="search-icon" size={18} />
-              <div className="search-text">
-                <span className="search-label">Who</span>
-                <input type="text" placeholder="Add guests" readOnly />
-              </div>
-            </div>
-
-            <button className="search-action-btn">
-              <Search size={18} />
-              <span>Search</span>
-            </button>
-          </div>
+          )}
         </div>
       </section>
 
@@ -153,50 +174,98 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
         </div>
       )}
 
-      {/* Featured Stays */}
+      {/* Live Property Filters Bar */}
+      <section className="explore-filters-container">
+        <PropertyFiltersBar
+          onFilterChange={handleFilterChange}
+          activeFilters={filterParams}
+        />
+      </section>
+
+      {/* Properties Section with View Toggle */}
       <section className="featured-section">
-        <div className="section-header">
-          <div>
-            <h2>Featured Stays for You</h2>
-            <p>Hand-picked, highest-rated accommodations with verified hosts</p>
+        {!loading && (
+          <div className="section-header flex items-center justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Available Stays ({totalCount})</h2>
+              <p className="text-sm text-gray-500">Explore handpicked properties verified by StayFinder</p>
+            </div>
+
+            {/* View Mode Toggle Button */}
+            <div className="view-mode-toggle flex items-center bg-gray-100 p-1 rounded-full border border-gray-200">
+              <button
+                type="button"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid size={14} />
+                <span>Grid</span>
+              </button>
+              <button
+                type="button"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  viewMode === 'map'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+                onClick={() => setViewMode('map')}
+              >
+                <Map size={14} />
+                <span>Show Map</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="stays-grid">
-          {FEATURED_STAYS.map((stay) => {
-            const isFav = savedStays.includes(stay.id);
-            return (
-              <div key={stay.id} className="stay-card">
-                <div className="stay-image-container">
-                  <img src={stay.image} alt={stay.title} className="stay-image" />
-                  <span className="stay-badge">{stay.tag}</span>
-                  <button
-                    className={`fav-btn ${isFav ? 'active' : ''}`}
-                    onClick={() => toggleFavorite(stay.id)}
-                  >
-                    <Heart size={18} fill={isFav ? '#e11d48' : 'none'} color={isFav ? '#e11d48' : '#fff'} />
-                  </button>
-                </div>
-
-                <div className="stay-details">
-                  <div className="stay-header-row">
-                    <h3>{stay.title}</h3>
-                    <div className="stay-rating">
-                      <Star size={15} fill="#f59e0b" color="#f59e0b" />
-                      <span>{stay.rating}</span>
-                    </div>
-                  </div>
-                  <p className="stay-location">{stay.location}</p>
-                  <p className="stay-price">
-                    <span className="price-num">${stay.price}</span> / night
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+            <Loader2 className="animate-spin mb-3 text-rose-500" size={36} />
+            <p className="text-base font-medium">Finding incredible places to stay...</p>
+          </div>
+        ) : viewMode === 'map' ? (
+          <div className="mb-8">
+            <MapPropertyViewer
+              properties={properties}
+              onSelectProperty={(prop) => {
+                if (onSelectProperty) onSelectProperty(prop);
+              }}
+            />
+          </div>
+        ) : properties.length > 0 ? (
+          <div className="stays-grid">
+            {properties.map((property) => (
+              <PropertyCard
+                key={property.id}
+                property={property}
+                onSelect={(prop) => {
+                  if (onSelectProperty) onSelectProperty(prop);
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200 p-8 max-w-xl mx-auto my-8">
+            <Building2 size={48} className="mx-auto text-gray-300 mb-3" />
+            <h3 className="text-lg font-semibold text-gray-800">No properties found</h3>
+            <p className="text-sm text-gray-500 mt-1 mb-4">
+              Try adjusting your destination search, clearing filters, or exploring other regions.
+            </p>
+            <button
+              className="btn btn-secondary inline-flex items-center gap-2"
+              onClick={() => {
+                setSearchLocation('');
+                setFilterParams({});
+              }}
+            >
+              Reset all filters
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );
 };
-

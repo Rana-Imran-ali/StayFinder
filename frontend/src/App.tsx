@@ -10,6 +10,8 @@ import { StayFinderLanding } from './components/StayFinderLanding';
 import { ProfileView } from './components/ProfileView';
 import { HostDashboardView } from './components/HostDashboardView';
 import { AdminManagementView } from './components/AdminManagementView';
+import { PropertyDetailsModal } from './components/PropertyDetailsModal';
+import type { Property } from './types/property';
 import './App.css';
 
 const MainContent: React.FC = () => {
@@ -22,6 +24,15 @@ const MainContent: React.FC = () => {
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
   const [isHostOnboardingOpen, setIsHostOnboardingOpen] = useState(false);
+
+  // Property details modal state
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
+  const [isPropertyDetailsOpen, setIsPropertyDetailsOpen] = useState(false);
+
+  const handleSelectProperty = (property: Property) => {
+    setSelectedProperty(property);
+    setIsPropertyDetailsOpen(true);
+  };
 
   // If unauthenticated and on protected view, fall back to explore
   React.useEffect(() => {
@@ -47,13 +58,17 @@ const MainContent: React.FC = () => {
             onOpenLogin={() => setIsLoginOpen(true)}
             onOpenRegister={() => setIsRegisterOpen(true)}
             onGoToProfile={() => setCurrentView('profile')}
+            onSelectProperty={handleSelectProperty}
           />
         )}
 
         {currentView === 'profile' && isAuthenticated && <ProfileView />}
 
         {currentView === 'host-portal' && isAuthenticated && (
-          <HostDashboardView onOpenIdentityModal={() => setIsIdentityModalOpen(true)} />
+          <HostDashboardView
+            onOpenIdentityModal={() => setIsIdentityModalOpen(true)}
+            onSelectProperty={handleSelectProperty}
+          />
         )}
 
         {currentView === 'admin-portal' && isAuthenticated && <AdminManagementView />}
@@ -100,6 +115,13 @@ const MainContent: React.FC = () => {
         isOpen={isHostOnboardingOpen}
         onClose={() => setIsHostOnboardingOpen(false)}
         onSuccess={() => setCurrentView('host-portal')}
+      />
+
+      {/* Property Details Modal */}
+      <PropertyDetailsModal
+        property={selectedProperty}
+        isOpen={isPropertyDetailsOpen}
+        onClose={() => setIsPropertyDetailsOpen(false)}
       />
     </div>
   );

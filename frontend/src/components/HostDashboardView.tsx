@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import type { HostProfile, PayoutMethod, HostVerification } from '../types/auth';
+import type { Property } from '../types/property';
+import { HostPropertyList } from './HostPropertyList';
 import {
   Home,
   ShieldCheck,
@@ -15,18 +17,20 @@ import {
   Trash2,
   Check,
   Building,
+  Building2,
   HelpCircle,
   Loader2,
 } from 'lucide-react';
 
 interface HostDashboardViewProps {
   onOpenIdentityModal: () => void;
+  onSelectProperty?: (property: Property) => void;
 }
 
-export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIdentityModal }) => {
+export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIdentityModal, onSelectProperty }) => {
   const { user, refreshUser } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'account' | 'payouts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'profile' | 'account' | 'payouts'>('overview');
   const [hostProfile, setHostProfile] = useState<HostProfile | null>(null);
   const [verification, setVerification] = useState<HostVerification | null>(null);
   const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
@@ -292,6 +296,13 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIden
           <span>Host Overview</span>
         </button>
         <button
+          className={`tab-btn ${activeTab === 'listings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('listings')}
+        >
+          <Building2 size={18} />
+          <span>My Properties</span>
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
@@ -413,6 +424,13 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIden
               <span className="stat-sub">Default property policy</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: My Properties */}
+      {activeTab === 'listings' && (
+        <div className="card-form">
+          <HostPropertyList onSelectProperty={onSelectProperty} />
         </div>
       )}
 

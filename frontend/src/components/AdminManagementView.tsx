@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import type { User, IdentityVerification, HostVerification, AdminActivityLog } from '../types/auth';
+import { AdminLocationManager } from './AdminLocationManager';
 import {
   ShieldCheck,
   Users,
@@ -13,10 +14,11 @@ import {
   Search,
   Loader2,
   Lock,
+  Globe,
 } from 'lucide-react';
 
 export const AdminManagementView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'identity' | 'hosts' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'identity' | 'hosts' | 'locations' | 'logs'>('overview');
 
   // Stats & Overview
   const [stats, setStats] = useState<any>(null);
@@ -186,6 +188,13 @@ export const AdminManagementView: React.FC = () => {
         >
           <Home size={18} />
           <span>Host Applications</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'locations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('locations')}
+        >
+          <Globe size={18} />
+          <span>Locations & Geo</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'logs' ? 'active' : ''}`}
@@ -613,6 +622,9 @@ export const AdminManagementView: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Tab 5: Locations & Geo Data Management */}
+      {activeTab === 'locations' && <AdminLocationManager />}
 
       {/* Reject Modal */}
       {rejectingTarget && (
