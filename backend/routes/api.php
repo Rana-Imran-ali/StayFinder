@@ -10,6 +10,9 @@ use App\Http\Controllers\PropertyController;
 use App\Http\Controllers\PropertyImageController;
 use App\Http\Controllers\AmenityController;
 use App\Http\Controllers\PropertyAvailabilityController;
+use App\Http\Controllers\PropertyPricingController;
+use App\Http\Controllers\BookingController;
+use App\Http\Controllers\HostBookingController;
 use App\Http\Controllers\CountryController;
 use App\Http\Controllers\StateController;
 use App\Http\Controllers\CityController;
@@ -57,6 +60,7 @@ Route::get('/cities/{id}', [CityController::class, 'show']);
 Route::get('/properties', [PropertyController::class, 'index']);
 Route::get('/properties/map', [PropertyController::class, 'mapProperties']);
 Route::get('/properties/{id}/availability', [PropertyAvailabilityController::class, 'index']);
+Route::post('/properties/{id}/check-availability', [PropertyAvailabilityController::class, 'checkAvailability']);
 Route::get('/properties/{slugOrId}', [PropertyController::class, 'show']);
 Route::get('/amenities', [AmenityController::class, 'index']);
 
@@ -96,6 +100,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('verification/identity')->group(function () {
         Route::get('/status', [VerificationController::class, 'status']);
         Route::post('/', [VerificationController::class, 'submitIdentity']);
+    });
+
+    // 4. Guest Bookings Module
+    Route::prefix('bookings')->group(function () {
+        Route::get('/', [BookingController::class, 'index']);
+        Route::post('/', [BookingController::class, 'store']);
+        Route::get('/{id}', [BookingController::class, 'show']);
+        Route::post('/{id}/cancel', [BookingController::class, 'cancel']);
     });
 
     // 4. Host Management Module
@@ -142,8 +154,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/images', [PropertyImageController::class, 'upload']);
         Route::put('/{id}/images/{imageId}/primary', [PropertyImageController::class, 'setPrimary']);
         Route::delete('/{id}/images/{imageId}', [PropertyImageController::class, 'destroy']);
-        // Availability Calendar Management
+        // Availability Calendar & Date Rules
+        Route::get('/{id}/calendar', [PropertyAvailabilityController::class, 'calendarMatrix']);
+        Route::post('/{id}/block-dates', [PropertyAvailabilityController::class, 'blockDateRange']);
         Route::put('/{id}/availability', [PropertyAvailabilityController::class, 'update']);
+
+        // Pricing Rules & Seasonal Rates
+        Route::get('/{id}/pricing', [PropertyPricingController::class, 'getPricingRules']);
+        Route::put('/{id}/pricing', [PropertyPricingController::class, 'updatePricingRules']);
+        Route::get('/{id}/seasonal-prices', [PropertyPricingController::class, 'getSeasonalPrices']);
+        Route::post('/{id}/seasonal-prices', [PropertyPricingController::class, 'storeSeasonalPrice']);
+        Route::put('/{id}/seasonal-prices/{ruleId}', [PropertyPricingController::class, 'updateSeasonalPrice']);
+        Route::delete('/{id}/seasonal-prices/{ruleId}', [PropertyPricingController::class, 'destroySeasonalPrice']);
+    });
+
+    // 6. Host Reservations Management Module
+    Route::middleware('role:host')->prefix('host/bookings')->group(function () {
+        Route::get('/', [HostBookingController::class, 'index']);
+        Route::post('/{id}/accept', [HostBookingController::class, 'accept']);
+        Route::post('/{id}/reject', [HostBookingController::class, 'reject']);
     });
 
     // 6. Admin Management Module (Protected by role:admin)

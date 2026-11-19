@@ -27,9 +27,12 @@ class DatabaseSeeder extends Seeder
             Role::firstOrCreate(['slug' => $roleData['slug']], $roleData);
         }
 
-        // Seed platform amenities catalog
+        // Seed platform catalogs & demo data
         $this->call([
             AmenitySeeder::class,
+            DummyListingsSeeder::class,
+            PropertyPricingSeeder::class,
+            BookingSeeder::class,
         ]);
     }
 }

@@ -10,6 +10,7 @@ import { StayFinderLanding } from './components/StayFinderLanding';
 import { ProfileView } from './components/ProfileView';
 import { HostDashboardView } from './components/HostDashboardView';
 import { AdminManagementView } from './components/AdminManagementView';
+import { MyTripsView } from './components/MyTripsView';
 import { PropertyDetailsModal } from './components/PropertyDetailsModal';
 import type { Property } from './types/property';
 import './App.css';
@@ -63,6 +64,10 @@ const MainContent: React.FC = () => {
         )}
 
         {currentView === 'profile' && isAuthenticated && <ProfileView />}
+
+        {currentView === 'trips' && isAuthenticated && (
+          <MyTripsView onExploreStays={() => setCurrentView('explore')} />
+        )}
 
         {currentView === 'host-portal' && isAuthenticated && (
           <HostDashboardView
@@ -122,6 +127,10 @@ const MainContent: React.FC = () => {
         property={selectedProperty}
         isOpen={isPropertyDetailsOpen}
         onClose={() => setIsPropertyDetailsOpen(false)}
+        onReserveSuccess={() => {
+          setIsPropertyDetailsOpen(false);
+          setCurrentView('trips');
+        }}
       />
     </div>
   );

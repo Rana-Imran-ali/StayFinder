@@ -93,6 +93,16 @@ class User extends Authenticatable
         return $this->hasMany(Property::class, 'host_id');
     }
 
+    public function guestBookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'guest_id');
+    }
+
+    public function hostBookings(): HasMany
+    {
+        return $this->hasMany(Booking::class, 'host_id');
+    }
+
     public function adminLogs(): HasMany
     {
         return $this->hasMany(AdminActivityLog::class, 'admin_id');
@@ -100,12 +110,16 @@ class User extends Authenticatable
 
     public function hasRole(string $role): bool
     {
-        return $this->roles()->where('slug', $role)->orWhere('name', $role)->exists();
+        return $this->roles()->where(function ($q) use ($role) {
+            $q->where('slug', $role)->orWhere('name', $role);
+        })->exists();
     }
 
     public function hasAnyRole(array $roles): bool
     {
-        return $this->roles()->whereIn('slug', $roles)->orWhereIn('name', $roles)->exists();
+        return $this->roles()->where(function ($q) use ($roles) {
+            $q->whereIn('slug', $roles)->orWhereIn('name', $roles);
+        })->exists();
     }
 
     public function assignRole(string|Role $role): void

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Compass, User as UserIcon, LogOut, ShieldCheck, Home, Key, Menu, X, Sparkles, FileCheck } from 'lucide-react';
+import { Compass, User as UserIcon, LogOut, ShieldCheck, Home, Key, Menu, X, Sparkles, FileCheck, Luggage } from 'lucide-react';
 
 interface NavbarProps {
   onOpenLogin: () => void;
@@ -56,6 +56,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           {isAuthenticated && (
             <>
               <button
+                className={`nav-btn ${currentView === 'trips' ? 'active' : ''}`}
+                onClick={() => setCurrentView('trips')}
+              >
+                <Luggage size={18} />
+                <span>My Trips</span>
+              </button>
+
+              <button
                 className={`nav-btn ${currentView === 'profile' ? 'active' : ''}`}
                 onClick={() => setCurrentView('profile')}
               >
@@ -94,8 +102,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </div>
 
-        {/* Right Actions */}
-        <div className="nav-actions desktop-only">
+        {/* Right Actions & Auth */}
+        <div className="nav-actions">
           {isAuthenticated && user ? (
             <div className="user-profile-menu">
               <button
@@ -109,26 +117,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                     {user.name.charAt(0).toUpperCase()}
                   </div>
                 )}
-                <div className="profile-chip-info">
+                <div className="profile-chip-info desktop-only">
                   <span className="user-name">{user.name}</span>
                   <span className="user-role-tag">
-                    {user.roles?.[0]?.name || 'Member'}
+                    {user.roles?.[0]?.name || 'Customer'}
                   </span>
                 </div>
               </button>
 
+              {/* Profile Dropdown */}
               {dropdownOpen && (
                 <div className="profile-dropdown">
                   <div className="dropdown-header">
                     <p className="dd-name">{user.name}</p>
                     <p className="dd-email">{user.email}</p>
-                    <div className="dd-verif-status mt-1">
-                      {user.is_identity_verified ? (
-                        <span className="badge badge-success text-xs">ID Verified</span>
-                      ) : (
-                        <span className="badge badge-warning text-xs">ID Unverified</span>
-                      )}
-                    </div>
                   </div>
                   <hr className="dd-divider" />
                   <button
@@ -139,7 +141,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }}
                   >
                     <UserIcon size={16} />
-                    <span>Account Settings</span>
+                    <span>My Profile</span>
+                  </button>
+                  <button
+                    className="dd-item"
+                    onClick={() => {
+                      setCurrentView('trips');
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <Luggage size={16} />
+                    <span>My Trips</span>
                   </button>
                   <button
                     className="dd-item"
@@ -151,7 +163,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <FileCheck size={16} />
                     <span>Identity Verification</span>
                   </button>
-                  {isHost ? (
+                  {isHost && (
                     <button
                       className="dd-item"
                       onClick={() => {
@@ -160,18 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       }}
                     >
                       <Key size={16} />
-                      <span>Host Dashboard</span>
-                    </button>
-                  ) : (
-                    <button
-                      className="dd-item"
-                      onClick={() => {
-                        onOpenHostOnboarding();
-                        setDropdownOpen(false);
-                      }}
-                    >
-                      <Sparkles size={16} />
-                      <span>Become a Host</span>
+                      <span>Host Portal</span>
                     </button>
                   )}
                   {isAdmin && (
@@ -211,15 +212,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             </div>
           )}
-        </div>
 
-        {/* Mobile Hamburger */}
-        <button
-          className="mobile-toggle mobile-only"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        >
-          {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+          {/* Mobile Menu Hamburger */}
+          <button
+            className="mobile-toggle"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          >
+            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer */}
@@ -236,6 +237,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
           {isAuthenticated ? (
             <>
+              <button
+                className="mobile-item"
+                onClick={() => {
+                  setCurrentView('trips');
+                  setMobileMenuOpen(false);
+                }}
+              >
+                My Trips
+              </button>
               <button
                 className="mobile-item"
                 onClick={() => {

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import type { HostProfile, PayoutMethod, HostVerification } from '../types/auth';
 import type { Property } from '../types/property';
 import { HostPropertyList } from './HostPropertyList';
+import { HostReservationsManager } from './HostReservationsManager';
 import {
   Home,
   ShieldCheck,
@@ -20,6 +21,7 @@ import {
   Building2,
   HelpCircle,
   Loader2,
+  Calendar,
 } from 'lucide-react';
 
 interface HostDashboardViewProps {
@@ -30,7 +32,7 @@ interface HostDashboardViewProps {
 export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIdentityModal, onSelectProperty }) => {
   const { user, refreshUser } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'profile' | 'account' | 'payouts'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'listings' | 'reservations' | 'profile' | 'account' | 'payouts'>('overview');
   const [hostProfile, setHostProfile] = useState<HostProfile | null>(null);
   const [verification, setVerification] = useState<HostVerification | null>(null);
   const [payoutMethods, setPayoutMethods] = useState<PayoutMethod[]>([]);
@@ -303,6 +305,13 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIden
           <span>My Properties</span>
         </button>
         <button
+          className={`tab-btn ${activeTab === 'reservations' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reservations')}
+        >
+          <Calendar size={18} />
+          <span>Reservations</span>
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
@@ -431,6 +440,13 @@ export const HostDashboardView: React.FC<HostDashboardViewProps> = ({ onOpenIden
       {activeTab === 'listings' && (
         <div className="card-form">
           <HostPropertyList onSelectProperty={onSelectProperty} />
+        </div>
+      )}
+
+      {/* Tab: Reservations Management */}
+      {activeTab === 'reservations' && (
+        <div className="card-form">
+          <HostReservationsManager />
         </div>
       )}
 

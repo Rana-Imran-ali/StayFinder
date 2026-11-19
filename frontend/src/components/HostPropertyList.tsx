@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { propertyApi } from '../services/propertyApi';
 import type { Property } from '../types/property';
 import { CreatePropertyModal } from './CreatePropertyModal';
+import { HostAvailabilityCalendar } from './HostAvailabilityCalendar';
+import { HostPricingSettingsModal } from './HostPricingSettingsModal';
 import {
   Plus,
   Building2,
   Trash2,
   Image as ImageIcon,
+  Calendar as CalendarIcon,
+  DollarSign,
   AlertCircle,
   Loader2,
   ExternalLink,
@@ -31,6 +35,8 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
   // Modals & Action States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedForPhotos, setSelectedForPhotos] = useState<Property | null>(null);
+  const [selectedForCalendar, setSelectedForCalendar] = useState<Property | null>(null);
+  const [selectedForPricing, setSelectedForPricing] = useState<Property | null>(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [photoActionError, setPhotoActionError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -253,7 +259,21 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
                         </select>
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-md"
+                            title="Availability & Calendar"
+                            onClick={() => setSelectedForCalendar(property)}
+                          >
+                            <CalendarIcon size={16} />
+                          </button>
+                          <button
+                            className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md"
+                            title="Pricing & Stay Rules"
+                            onClick={() => setSelectedForPricing(property)}
+                          >
+                            <DollarSign size={16} />
+                          </button>
                           <button
                             className="p-1.5 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md"
                             title="Manage Photos"
@@ -429,6 +449,27 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
           fetchProperties(1);
         }}
       />
+
+      {/* Host Availability Calendar Modal */}
+      {selectedForCalendar && (
+        <HostAvailabilityCalendar
+          property={selectedForCalendar}
+          isOpen={!!selectedForCalendar}
+          onClose={() => setSelectedForCalendar(null)}
+        />
+      )}
+
+      {/* Host Pricing Settings Modal */}
+      {selectedForPricing && (
+        <HostPricingSettingsModal
+          property={selectedForPricing}
+          isOpen={!!selectedForPricing}
+          onClose={() => setSelectedForPricing(null)}
+          onUpdated={() => {
+            fetchProperties(currentPage);
+          }}
+        />
+      )}
     </div>
   );
 };

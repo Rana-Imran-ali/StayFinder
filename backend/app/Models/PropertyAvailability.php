@@ -11,7 +11,9 @@ class PropertyAvailability extends Model
         'property_id',
         'date',
         'is_available',
+        'status',
         'custom_price',
+        'min_nights',
         'note',
     ];
 
@@ -21,6 +23,7 @@ class PropertyAvailability extends Model
             'date' => 'date',
             'is_available' => 'boolean',
             'custom_price' => 'float',
+            'min_nights' => 'integer',
         ];
     }
 

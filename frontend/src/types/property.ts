@@ -1,5 +1,6 @@
 import type { User } from './auth';
 import type { Country, State, City } from './location';
+import type { SeasonalPriceRule } from './pricing';
 
 export interface PropertyImage {
   id: number;
@@ -28,6 +29,8 @@ export interface PropertyAvailability {
   date: string;
   is_available: boolean;
   custom_price: number | null;
+  min_nights?: number | null;
+  status?: 'available' | 'blocked' | 'booked' | 'pending';
   note: string | null;
 }
 
@@ -40,7 +43,17 @@ export interface Property {
   property_type: 'apartment' | 'house' | 'villa' | 'cabin' | 'cottage' | 'loft' | 'hotel';
   room_type: 'entire_place' | 'private_room' | 'shared_room';
   price_per_night: number;
+  weekend_price?: number | null;
   cleaning_fee: number;
+  extra_guest_fee?: number | null;
+  extra_guest_threshold?: number | null;
+  pet_fee?: number | null;
+  security_deposit?: number | null;
+  weekly_discount_percent?: number | null;
+  monthly_discount_percent?: number | null;
+  tax_percent?: number | null;
+  min_nights?: number;
+  max_nights?: number | null;
   currency: string;
   country_id?: number | null;
   state_id?: number | null;
@@ -70,6 +83,7 @@ export interface Property {
   primary_image?: PropertyImage | null;
   primaryImage?: PropertyImage | null;
   amenities?: Amenity[];
+  seasonalPrices?: SeasonalPriceRule[];
 }
 
 export interface PropertyFilterParams {
@@ -102,7 +116,17 @@ export interface CreatePropertyPayload {
   property_type: 'apartment' | 'house' | 'villa' | 'cabin' | 'cottage' | 'loft' | 'hotel';
   room_type: 'entire_place' | 'private_room' | 'shared_room';
   price_per_night: number;
+  weekend_price?: number | null;
   cleaning_fee?: number;
+  extra_guest_fee?: number;
+  extra_guest_threshold?: number;
+  pet_fee?: number;
+  security_deposit?: number;
+  weekly_discount_percent?: number;
+  monthly_discount_percent?: number;
+  tax_percent?: number;
+  min_nights?: number;
+  max_nights?: number;
   country_id?: number | null;
   state_id?: number | null;
   city_id?: number | null;

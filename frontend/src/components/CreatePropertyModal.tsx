@@ -51,7 +51,9 @@ export const CreatePropertyModal: React.FC<CreatePropertyModalProps> = ({
     property_type: 'apartment',
     room_type: 'entire_place',
     price_per_night: 120,
+    weekend_price: 140,
     cleaning_fee: 35,
+    min_nights: 2,
     address: '',
     city: '',
     state: '',
@@ -563,6 +565,32 @@ export const CreatePropertyModal: React.FC<CreatePropertyModalProps> = ({
                       onChange={(e) => handleInputChange('cleaning_fee', Number(e.target.value))}
                     />
                   </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Weekend Nightly Price ($ USD)</label>
+                  <div className="input-with-icon">
+                    <span className="icon-prefix">$</span>
+                    <input
+                      type="number"
+                      className="form-input pl-8"
+                      min={0}
+                      placeholder="Optional"
+                      value={formData.weekend_price ?? ''}
+                      onChange={(e) => handleInputChange('weekend_price', e.target.value ? Number(e.target.value) : null)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Minimum Stay (Nights)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    value={formData.min_nights || 1}
+                    onChange={(e) => handleInputChange('min_nights', Number(e.target.value))}
+                  />
                 </div>
               </div>
 

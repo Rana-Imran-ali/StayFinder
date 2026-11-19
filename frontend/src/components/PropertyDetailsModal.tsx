@@ -1,5 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Property, PropertyImage } from '../types/property';
+import type { PricingBreakdown } from '../types/pricing';
+import type { Booking } from '../types/booking';
+import { pricingApi } from '../services/pricingApi';
+import { useAuth } from '../context/AuthContext';
+import { CheckoutModal } from './CheckoutModal';
 import {
   X,
   MapPin,
@@ -13,7 +18,9 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
-  Share2
+  Share2,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface PropertyDetailsModalProps {
@@ -29,12 +36,76 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   onClose,
   onReserveSuccess,
 }) => {
+  const { user } = useAuth();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [checkInDate, setCheckInDate] = useState('');
   const [checkOutDate, setCheckOutDate] = useState('');
   const [guestCount, setGuestCount] = useState(1);
+  const [hasPet, setHasPet] = useState(false);
   const [isReserved, setIsReserved] = useState(false);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Dynamic pricing & availability state
+  const [pricingBreakdown, setPricingBreakdown] = useState<PricingBreakdown | null>(null);
+  const [calculating, setCalculating] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
+  // Auto-calculate pricing when dates/guests change
+  useEffect(() => {
+    if (!property || !checkInDate || !checkOutDate) {
+      setPricingBreakdown(null);
+      setAvailabilityError(null);
+      return;
+    }
+
+    if (new Date(checkOutDate) <= new Date(checkInDate)) {
+      setAvailabilityError('Check-out date must be after check-in date.');
+      setPricingBreakdown(null);
+      return;
+    }
+
+    let isMounted = true;
+    const calculatePricing = async () => {
+      setCalculating(true);
+      setAvailabilityError(null);
+      try {
+        const res = await pricingApi.checkAvailability(property.id, {
+          check_in: checkInDate,
+          check_out: checkOutDate,
+          guests: guestCount,
+          has_pet: hasPet,
+        });
+
+        if (!isMounted) return;
+
+        if (res.success && res.data?.breakdown) {
+          const breakdown = res.data.breakdown;
+          if (!breakdown.available) {
+            setAvailabilityError(
+              'Selected dates include dates that are already blocked or booked.'
+            );
+            setPricingBreakdown(null);
+          } else {
+            setPricingBreakdown(breakdown);
+            setAvailabilityError(null);
+          }
+        }
+      } catch (err: any) {
+        if (!isMounted) return;
+        setAvailabilityError(err.message || 'Unable to calculate pricing for these dates.');
+        setPricingBreakdown(null);
+      } finally {
+        if (isMounted) setCalculating(false);
+      }
+    };
+
+    calculatePricing();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [property?.id, checkInDate, checkOutDate, guestCount, hasPet]);
 
   if (!isOpen || !property) return null;
 
@@ -49,8 +120,8 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   const images: string[] =
     property.images && property.images.length > 0
       ? property.images.map((img: PropertyImage) =>
-          img.image_path.startsWith('http') ? img.image_path : `/storage/${img.image_path}`
-        )
+        img.image_path.startsWith('http') ? img.image_path : `/storage/${img.image_path}`
+      )
       : fallbackImages;
 
   const currentImage = images[selectedImageIndex] || images[0];
@@ -71,20 +142,36 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
     }
   };
 
-  // Pricing calculation
+  // Fallback initial calculation
   const nights = checkInDate && checkOutDate
     ? Math.max(1, Math.round((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24)))
     : 3;
   const baseTotal = nights * Number(property.price_per_night);
   const cleaningFee = Number(property.cleaning_fee) || 0;
-  const serviceFee = Math.round(baseTotal * 0.12);
-  const grandTotal = baseTotal + cleaningFee + serviceFee;
 
   const handleReserve = () => {
+    if (!user) {
+      alert('Please sign in or create an account to book this stay.');
+      return;
+    }
+    if (!checkInDate || !checkOutDate) {
+      setAvailabilityError('Please select both check-in and check-out dates.');
+      return;
+    }
+    if (!pricingBreakdown) {
+      setAvailabilityError('Please wait for pricing to be calculated.');
+      return;
+    }
+    setIsCheckoutOpen(true);
+  };
+
+  const handleBookingSuccess = (_booking: Booking) => {
     setIsReserved(true);
-    setTimeout(() => {
-      if (onReserveSuccess) onReserveSuccess(property);
-    }, 1200);
+    setIsCheckoutOpen(false);
+    onClose();
+    if (onReserveSuccess) {
+      onReserveSuccess(property);
+    }
   };
 
   const formattedType =
@@ -98,306 +185,394 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header bar */}
-        <div className="modal-header-actions">
-          <div className="property-modal-tags">
+        <div className="modal-header-row">
+          <div className="header-tags">
             <span className="badge badge-primary">{formattedType}</span>
             <span className="badge badge-secondary">{formattedRoomType}</span>
             {property.instant_bookable && (
-              <span className="badge badge-instant">
-                <Zap size={14} className="mr-1" /> Instant Book
+              <span className="badge badge-accent">
+                <Zap size={12} /> Instant Book
               </span>
             )}
           </div>
-          <div className="header-button-group">
+          <div className="header-actions">
             <button
-              className="icon-action-btn"
+              className="action-icon-btn"
               onClick={handleShare}
               title="Share listing"
             >
               <Share2 size={18} />
               {copiedLink && <span className="tooltip-copied">Copied!</span>}
             </button>
-            <button
-              className="icon-action-btn"
-              onClick={onClose}
-              title="Close modal"
-            >
+            <button className="modal-close-btn" onClick={onClose}>
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* Modal Body */}
-        <div className="modal-scrollable-content">
-          <h1 className="modal-property-title">{property.title}</h1>
-          <div className="modal-property-subtitle">
-            <div className="location-info">
-              <MapPin size={16} className="text-rose-500" />
-              <span>
-                {property.address ? `${property.address}, ` : ''}
-                {property.city}, {property.state ? `${property.state}, ` : ''}{property.country}
-              </span>
-            </div>
-            <div className="rating-pill">
-              <Star size={16} className="fill-amber-400 text-amber-400" />
-              <span className="font-semibold">4.95</span>
-              <span className="text-gray-400">(28 reviews)</span>
+        {/* Modal Scrollable Body */}
+        <div className="modal-scroll-body">
+          {/* Main Title & Rating */}
+          <div className="property-title-section">
+            <h1 className="property-title">{property.title}</h1>
+            <div className="property-meta-row">
+              <div className="rating-pill">
+                <Star size={16} fill="#f59e0b" color="#f59e0b" />
+                <span className="rating-score">4.95</span>
+                <span className="review-count">(28 reviews)</span>
+              </div>
+              <span className="meta-dot">•</span>
+              <div className="location-pill">
+                <MapPin size={15} />
+                <span>
+                  {property.city ? `${property.city}, ` : ''}
+                  {property.state ? `${property.state}, ` : ''}
+                  {property.country || 'Global'}
+                </span>
+              </div>
+              {property.status === 'published' && (
+                <>
+                  <span className="meta-dot">•</span>
+                  <span className="verified-badge">
+                    <ShieldCheck size={14} /> Verified Stay
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
-          {/* Photo Gallery with Preview & Thumbnails */}
+          {/* Image Gallery Hero */}
           <div className="gallery-section">
-            <div className="gallery-main-viewer">
+            <div className="main-image-wrapper">
               <img
                 src={currentImage}
                 alt={property.title}
-                className="gallery-active-image"
+                className="main-gallery-image"
               />
               {images.length > 1 && (
                 <>
                   <button
-                    className="gallery-nav-btn prev-btn"
+                    className="gallery-nav-btn prev"
                     onClick={handlePrevImage}
                     title="Previous image"
                   >
                     <ChevronLeft size={22} />
                   </button>
                   <button
-                    className="gallery-nav-btn next-btn"
+                    className="gallery-nav-btn next"
                     onClick={handleNextImage}
                     title="Next image"
                   >
                     <ChevronRight size={22} />
                   </button>
-                  <div className="gallery-counter">
+                  <div className="image-counter">
                     {selectedImageIndex + 1} / {images.length}
                   </div>
                 </>
               )}
             </div>
 
+            {/* Thumbnail Strip */}
             {images.length > 1 && (
-              <div className="gallery-thumbnails-strip">
-                {images.map((img, idx) => (
+              <div className="thumbnail-strip">
+                {images.map((imgUrl, idx) => (
                   <button
                     key={idx}
-                    className={`thumbnail-btn ${selectedImageIndex === idx ? 'selected' : ''}`}
+                    className={`thumb-btn ${idx === selectedImageIndex ? 'active' : ''}`}
                     onClick={() => setSelectedImageIndex(idx)}
                   >
-                    <img src={img} alt={`Thumbnail ${idx + 1}`} />
+                    <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* 2-Column Content Layout: Left Details, Right Booking Widget */}
-          <div className="property-body-grid">
-            <div className="property-main-column">
-              {/* Host & Core Specs */}
-              <div className="host-specs-card">
-                <div className="host-avatar-info">
-                  <div className="host-avatar-circle">
-                    {property.host?.name ? property.host.name[0].toUpperCase() : 'H'}
-                  </div>
+          {/* Two-Column Details & Reservation Card */}
+          <div className="property-columns-grid">
+            {/* Left Column: Property Info & Amenities */}
+            <div className="property-main-col">
+              {/* Quick Specs Pill Row */}
+              <div className="specs-card">
+                <div className="spec-item">
+                  <Users size={20} className="spec-icon" />
                   <div>
-                    <h3 className="host-name">
-                      Hosted by {property.host?.name || 'Verified StayFinder Host'}
-                    </h3>
-                    <p className="host-status">
-                      <ShieldCheck size={14} className="text-emerald-500 inline mr-1" />
-                      Superhost · Verified Listing
+                    <span className="spec-value">{property.max_guests} Guests</span>
+                    <span className="spec-label">Maximum capacity</span>
+                  </div>
+                </div>
+                <div className="spec-divider" />
+                <div className="spec-item">
+                  <Bed size={20} className="spec-icon" />
+                  <div>
+                    <span className="spec-value">{property.bedrooms} Bedrooms</span>
+                    <span className="spec-label">{property.beds} Beds total</span>
+                  </div>
+                </div>
+                <div className="spec-divider" />
+                <div className="spec-item">
+                  <Bath size={20} className="spec-icon" />
+                  <div>
+                    <span className="spec-value">{property.bathrooms} Bathrooms</span>
+                    <span className="spec-label">Full baths</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Host Snippet */}
+              {property.host && (
+                <div className="host-snippet-card">
+                  <div className="host-avatar-wrapper">
+                    {property.host.profile?.profile_photo ? (
+                      <img
+                        src={property.host.profile.profile_photo.startsWith('http')
+                          ? property.host.profile.profile_photo
+                          : `/storage/${property.host.profile.profile_photo}`
+                        }
+                        alt={property.host.name}
+                        className="host-avatar"
+                      />
+                    ) : (
+                      <div className="host-avatar-placeholder">
+                        {property.host.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="host-info-text">
+                    <h3>Hosted by {property.host.name}</h3>
+                    <p>
+                      Superhost • Fast response time (within an hour) • Verified identity
                     </p>
                   </div>
                 </div>
-
-                <div className="specs-row-badges">
-                  <div className="spec-badge">
-                    <Users size={16} />
-                    <span>{property.max_guests} Guests</span>
-                  </div>
-                  <div className="spec-badge">
-                    <Bed size={16} />
-                    <span>{property.bedrooms} Bedrooms ({property.beds} Beds)</span>
-                  </div>
-                  <div className="spec-badge">
-                    <Bath size={16} />
-                    <span>{property.bathrooms} Baths</span>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Description */}
-              <div className="detail-section">
-                <h2 className="section-title">About this space</h2>
-                <div className="description-text">
-                  {property.description.split('\n').map((paragraph, index) => (
-                    <p key={index}>{paragraph}</p>
-                  ))}
-                </div>
+              <div className="section-block">
+                <h3 className="section-title">About this stay</h3>
+                <p className="property-description-text">{property.description}</p>
               </div>
 
               {/* Amenities */}
-              <div className="detail-section">
-                <h2 className="section-title">What this place offers</h2>
-                {property.amenities && property.amenities.length > 0 ? (
-                  <div className="amenities-grid-modern">
+              {property.amenities && property.amenities.length > 0 && (
+                <div className="section-block">
+                  <h3 className="section-title">What this place offers</h3>
+                  <div className="amenities-grid">
                     {property.amenities.map((amenity) => (
-                      <div key={amenity.id} className="amenity-chip-item">
-                        <Check size={18} className="text-emerald-500 flex-shrink-0" />
+                      <div key={amenity.id} className="amenity-pill-item">
+                        <Check size={16} className="text-emerald-500" />
                         <span>{amenity.name}</span>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <p className="text-muted">Standard essentials included (Wifi, Heating, Hot water, Clean linens).</p>
-                )}
-              </div>
-
-              {/* Location & Map Section */}
-              <div className="detail-section">
-                <h2 className="section-title">Where you'll be</h2>
-                <div className="flex items-center gap-1.5 text-sm text-gray-700 mb-3">
-                  <MapPin size={16} className="text-rose-500 flex-shrink-0" />
-                  <span>
-                    {property.address ? `${property.address}, ` : ''}
-                    {property.city}, {property.state ? `${property.state}, ` : ''}{property.country}
-                  </span>
                 </div>
+              )}
 
-                {property.latitude && property.longitude && (
-                  <div className="location-map-card rounded-xl overflow-hidden border border-gray-200 relative h-60 bg-gray-100 shadow-sm">
-                    <iframe
-                      title="Property Location Map"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${(Number(property.longitude) - 0.015).toFixed(4)}%2C${(Number(property.latitude) - 0.015).toFixed(4)}%2C${(Number(property.longitude) + 0.015).toFixed(4)}%2C${(Number(property.latitude) + 0.015).toFixed(4)}&layer=mapnik&marker=${property.latitude}%2C${property.longitude}`}
-                      className="w-full h-full border-none pointer-events-none select-none"
-                    />
-                    <div className="absolute bottom-2 right-2 bg-white/90 text-gray-800 text-[11px] font-semibold px-2 py-0.5 rounded shadow">
-                      Exact location provided after booking
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Policies & Details */}
-              <div className="detail-section">
-                <h2 className="section-title">Things to know</h2>
-                <div className="policies-grid">
-                  <div className="policy-card">
+              {/* House Rules & Policies */}
+              <div className="section-block">
+                <h3 className="section-title">Stay Policies & Rules</h3>
+                <div className="rules-grid">
+                  <div className="rule-card">
                     <h4>Cancellation Policy</h4>
-                    <p className="capitalize font-medium text-gray-700">
-                      {property.cancellation_policy} cancellation
+                    <p>
+                      {property.cancellation_policy
+                        ? property.cancellation_policy.charAt(0).toUpperCase() +
+                          property.cancellation_policy.slice(1)
+                        : 'Flexible'}
                     </p>
-                    <p className="text-xs text-muted mt-1">
-                      {property.cancellation_policy === 'flexible'
-                        ? 'Full refund 1 day prior to arrival.'
-                        : property.cancellation_policy === 'moderate'
-                        ? 'Full refund up to 5 days before check-in.'
-                        : 'Full refund only if cancelled within 48 hours of booking.'}
-                    </p>
+                    <span className="rule-subtext">Full refund up to 48h before check-in</span>
                   </div>
-                  <div className="policy-card">
-                    <h4>House Rules</h4>
-                    <ul className="text-xs text-muted list-disc ml-4 mt-1 space-y-1">
-                      <li>Check-in: After 3:00 PM</li>
-                      <li>Check-out: Before 11:00 AM</li>
-                      <li>No smoking allowed</li>
-                      <li>Self check-in with keypad</li>
-                    </ul>
+                  <div className="rule-card">
+                    <h4>Check-in / Checkout</h4>
+                    <p>Check-in: 3:00 PM - 9:00 PM</p>
+                    <span className="rule-subtext">Checkout: 11:00 AM</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Right Booking Card */}
-            <div className="property-sidebar-column">
-              <div className="booking-card-widget">
-                <div className="widget-header">
+            {/* Right Column: Reservation Booking Box */}
+            <div className="property-side-col">
+              <div className="sticky-booking-card">
+                <div className="booking-card-header">
                   <div>
-                    <span className="price-big">${property.price_per_night}</span>
-                    <span className="price-period"> / night</span>
+                    <span className="booking-price">${property.price_per_night}</span>
+                    <span className="booking-per"> / night</span>
                   </div>
-                  <div className="rating-mini">
-                    <Star size={14} className="fill-amber-400 text-amber-400" />
+                  <div className="booking-rating">
+                    <Star size={14} fill="#f59e0b" color="#f59e0b" />
                     <span>4.95</span>
                   </div>
                 </div>
 
-                <div className="widget-date-inputs">
-                  <div className="date-input-group">
-                    <label>CHECK-IN</label>
-                    <input
-                      type="date"
-                      value={checkInDate}
-                      onChange={(e) => setCheckInDate(e.target.value)}
-                    />
+                {/* Date Selection Box */}
+                <div className="booking-inputs-box">
+                  <div className="date-inputs-row">
+                    <div className="date-input-field">
+                      <label>CHECK-IN</label>
+                      <input
+                        type="date"
+                        value={checkInDate}
+                        onChange={(e) => setCheckInDate(e.target.value)}
+                        placeholder="Add date"
+                      />
+                    </div>
+                    <div className="date-input-field">
+                      <label>CHECKOUT</label>
+                      <input
+                        type="date"
+                        value={checkOutDate}
+                        onChange={(e) => setCheckOutDate(e.target.value)}
+                        placeholder="Add date"
+                      />
+                    </div>
                   </div>
-                  <div className="date-input-group">
-                    <label>CHECK-OUT</label>
+
+                  <div className="guests-input-field">
+                    <label>GUESTS</label>
+                    <select
+                      value={guestCount}
+                      onChange={(e) => setGuestCount(Number(e.target.value))}
+                    >
+                      {Array.from({ length: property.max_guests }, (_, i) => i + 1).map((num) => (
+                        <option key={num} value={num}>
+                          {num} {num === 1 ? 'Guest' : 'Guests'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="pet-toggle-field p-2.5 flex items-center justify-between text-xs text-slate-600 border-t border-slate-100">
+                    <span>Bringing a pet?</span>
                     <input
-                      type="date"
-                      value={checkOutDate}
-                      onChange={(e) => setCheckOutDate(e.target.value)}
+                      type="checkbox"
+                      checked={hasPet}
+                      onChange={(e) => setHasPet(e.target.checked)}
+                      className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
                     />
                   </div>
                 </div>
 
-                <div className="guests-select-group">
-                  <label>GUESTS</label>
-                  <select
-                    value={guestCount}
-                    onChange={(e) => setGuestCount(Number(e.target.value))}
-                  >
-                    {Array.from({ length: property.max_guests || 1 }, (_, i) => i + 1).map((num) => (
-                      <option key={num} value={num}>
-                        {num} {num === 1 ? 'guest' : 'guests'}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Error Banner */}
+                {availabilityError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2 my-2">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{availabilityError}</span>
+                  </div>
+                )}
 
+                {/* Reserve Action Button */}
                 <button
-                  className={`btn-reserve-primary ${isReserved ? 'reserved' : ''}`}
+                  className="reserve-btn"
                   onClick={handleReserve}
-                  disabled={isReserved}
+                  disabled={calculating}
                 >
-                  {isReserved ? (
+                  {calculating ? (
                     <span className="flex items-center justify-center gap-2">
-                      <Sparkles size={18} /> Reservation Requested!
+                      <Loader2 size={18} className="animate-spin" />
+                      Checking rates...
+                    </span>
+                  ) : isReserved ? (
+                    <span className="flex items-center justify-center gap-2 text-emerald-100">
+                      <Check size={18} /> Reserved!
                     </span>
                   ) : (
-                    <span>{property.instant_bookable ? 'Instant Reserve' : 'Request to Book'}</span>
+                    <>
+                      <Sparkles size={18} />
+                      <span>{property.instant_bookable ? 'Instant Reserve' : 'Request to Book'}</span>
+                    </>
                   )}
                 </button>
 
-                <p className="no-charge-notice">You won't be charged yet</p>
+                <p className="charged-notice">You won't be charged yet</p>
 
-                <div className="price-breakdown">
-                  <div className="price-row">
-                    <span>${property.price_per_night} × {nights} nights</span>
-                    <span>${baseTotal}</span>
-                  </div>
-                  {cleaningFee > 0 && (
-                    <div className="price-row">
-                      <span>Cleaning fee</span>
-                      <span>${cleaningFee}</span>
-                    </div>
+                {/* Live Price Breakdown calculation */}
+                <div className="price-breakdown-table">
+                  {pricingBreakdown ? (
+                    <>
+                      <div className="price-row">
+                        <span>${property.price_per_night} × {pricingBreakdown.nights} nights</span>
+                        <span>${pricingBreakdown.base_total}</span>
+                      </div>
+                      {(pricingBreakdown.cleaning_fee ?? 0) > 0 && (
+                        <div className="price-row">
+                          <span>Cleaning fee</span>
+                          <span>${pricingBreakdown.cleaning_fee}</span>
+                        </div>
+                      )}
+                      {(pricingBreakdown.pet_fee ?? 0) > 0 && (
+                        <div className="price-row">
+                          <span>Pet fee</span>
+                          <span>${pricingBreakdown.pet_fee}</span>
+                        </div>
+                      )}
+                      {(pricingBreakdown.extra_guest_fee ?? 0) > 0 && (
+                        <div className="price-row">
+                          <span>Extra guest fee</span>
+                          <span>${pricingBreakdown.extra_guest_fee}</span>
+                        </div>
+                      )}
+                      {(pricingBreakdown.discount_amount ?? 0) > 0 && (
+                        <div className="price-row text-emerald-600 font-semibold">
+                          <span>{pricingBreakdown.discount_label || 'Discount'}</span>
+                          <span>-${pricingBreakdown.discount_amount}</span>
+                        </div>
+                      )}
+                      {(pricingBreakdown.tax_amount ?? 0) > 0 && (
+                        <div className="price-row">
+                          <span>Taxes ({pricingBreakdown.tax_percent}%)</span>
+                          <span>${pricingBreakdown.tax_amount}</span>
+                        </div>
+                      )}
+                      <div className="price-divider" />
+                      <div className="price-total-row">
+                        <span>Total (USD)</span>
+                        <span className="font-extrabold text-slate-900">${pricingBreakdown.total}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="price-row">
+                        <span>${property.price_per_night} × {nights} nights (est.)</span>
+                        <span>${baseTotal}</span>
+                      </div>
+                      {cleaningFee > 0 && (
+                        <div className="price-row">
+                          <span>Cleaning fee</span>
+                          <span>${cleaningFee}</span>
+                        </div>
+                      )}
+                      <div className="price-divider" />
+                      <div className="price-total-row">
+                        <span>Estimated Total</span>
+                        <span>${baseTotal + cleaningFee}</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 text-center mt-2">
+                        Select check-in & check-out dates above for live seasonal rates & discounts.
+                      </p>
+                    </>
                   )}
-                  <div className="price-row">
-                    <span>StayFinder service fee</span>
-                    <span>${serviceFee}</span>
-                  </div>
-                  <div className="price-divider" />
-                  <div className="price-total-row">
-                    <span>Total before taxes</span>
-                    <span>${grandTotal}</span>
-                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Checkout & Payment Modal */}
+      {isCheckoutOpen && pricingBreakdown && (
+        <CheckoutModal
+          property={property}
+          pricing={pricingBreakdown}
+          checkInDate={checkInDate}
+          checkOutDate={checkOutDate}
+          guestCount={guestCount}
+          hasPet={hasPet}
+          isOpen={isCheckoutOpen}
+          onClose={() => setIsCheckoutOpen(false)}
+          onSuccess={handleBookingSuccess}
+        />
+      )}
     </div>
   );
 };

@@ -19,7 +19,15 @@ class Property extends Model
         'property_type',
         'room_type',
         'price_per_night',
+        'weekend_price',
         'cleaning_fee',
+        'extra_guest_fee',
+        'extra_guest_threshold',
+        'pet_fee',
+        'security_deposit',
+        'weekly_discount_percent',
+        'monthly_discount_percent',
+        'tax_percent',
         'currency',
         'country_id',
         'state_id',
@@ -32,6 +40,8 @@ class Property extends Model
         'latitude',
         'longitude',
         'max_guests',
+        'min_nights',
+        'max_nights',
         'bedrooms',
         'beds',
         'bathrooms',
@@ -47,10 +57,20 @@ class Property extends Model
             'state_id' => 'integer',
             'city_id' => 'integer',
             'price_per_night' => 'float',
+            'weekend_price' => 'float',
             'cleaning_fee' => 'float',
+            'extra_guest_fee' => 'float',
+            'extra_guest_threshold' => 'integer',
+            'pet_fee' => 'float',
+            'security_deposit' => 'float',
+            'weekly_discount_percent' => 'float',
+            'monthly_discount_percent' => 'float',
+            'tax_percent' => 'float',
             'latitude' => 'float',
             'longitude' => 'float',
             'max_guests' => 'integer',
+            'min_nights' => 'integer',
+            'max_nights' => 'integer',
             'bedrooms' => 'integer',
             'beds' => 'integer',
             'bathrooms' => 'integer',
@@ -103,5 +123,15 @@ class Property extends Model
     public function availabilities(): HasMany
     {
         return $this->hasMany(PropertyAvailability::class);
+    }
+
+    public function seasonalPrices(): HasMany
+    {
+        return $this->hasMany(PropertySeasonalPrice::class);
+    }
+
+    public function bookings(): HasMany
+    {
+        return $this->hasMany(Booking::class);
     }
 }
