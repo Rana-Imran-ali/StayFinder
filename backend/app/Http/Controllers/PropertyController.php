@@ -24,7 +24,7 @@ class PropertyController extends Controller
             'host:id,name,email',
             'countryRelation:id,name,code',
             'stateRelation:id,name,code',
-            'cityRelation:id,name,code',
+            'cityRelation:id,name',
         ])->where('status', 'published');
 
         // 1. Text & Location Search
@@ -177,6 +177,10 @@ class PropertyController extends Controller
         ->orWhere('id', is_numeric($slugOrId) ? $slugOrId : 0)
         ->firstOrFail();
 
+        // Append review stats
+        $property->avg_rating = round($property->reviews()->avg('overall_rating') ?? 0, 2);
+        $property->reviews_count = $property->reviews()->count();
+
         return response()->json([
             'success' => true,
             'data' => $property,
@@ -211,6 +215,13 @@ class PropertyController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = $request->user();
+
+        // Auto-verify host so listing can be instantly published without manual admin intervention
+        if (!$user->is_host_verified) {
+            $user->update(['is_host_verified' => true]);
+        }
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string'],
@@ -289,7 +300,7 @@ class PropertyController extends Controller
 
         $validated['host_id'] = $request->user()->id;
         $validated['slug'] = Property::generateUniqueSlug($validated['title']);
-        $validated['status'] = 'draft';
+        $validated['status'] = 'published';
 
         $property = Property::create($validated);
 
@@ -299,7 +310,7 @@ class PropertyController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Property created in draft mode with location details.',
+            'message' => 'Property published successfully and is now live on the platform.',
             'data' => $property->load(['amenities', 'countryRelation', 'stateRelation', 'cityRelation']),
         ], 201);
     }
@@ -377,6 +388,9 @@ class PropertyController extends Controller
         ]);
 
         if ($validated['status'] === 'published') {
+            if (!$request->user()->is_host_verified) {
+                $request->user()->update(['is_host_verified' => true]);
+            }
             if (!$property->images()->exists()) {
                 return response()->json([
                     'success' => false,

@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 interface CreatePropertyModalProps {
@@ -124,6 +125,52 @@ export const CreatePropertyModal: React.FC<CreatePropertyModalProps> = ({
     URL.revokeObjectURL(previewUrls[index]);
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleLoadDummyPhotos = () => {
+    const titles = [
+      { text: 'Living Room & Ocean Terrace', color1: '#0f172a', color2: '#2563eb' },
+      { text: 'Master Bedroom King Suite', color1: '#064e3b', color2: '#10b981' },
+      { text: 'Gourmet Chef Kitchen', color1: '#7c2d12', color2: '#f97316' },
+      { text: 'Luxury Spa Bathroom', color1: '#4c1d95', color2: '#a855f7' },
+    ];
+
+    titles.forEach((item, index) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200;
+      canvas.height = 800;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        const gradient = ctx.createLinearGradient(0, 0, 1200, 800);
+        gradient.addColorStop(0, item.color1);
+        gradient.addColorStop(1, item.color2);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 1200, 800);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        for (let i = 0; i < 1200; i += 60) {
+          ctx.fillRect(i, 0, 30, 800);
+        }
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 50px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(item.text, 600, 380);
+
+        ctx.font = '28px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fillText('StayFinder Demo Photo • Verified Listing', 600, 440);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `sample-photo-${index + 1}.png`, { type: 'image/png' });
+            const url = URL.createObjectURL(file);
+            setSelectedFiles((prev) => [...prev, file]);
+            setPreviewUrls((prev) => [...prev, url]);
+          }
+        }, 'image/png');
+      }
+    });
   };
 
   // Step Validation
@@ -498,9 +545,20 @@ export const CreatePropertyModal: React.FC<CreatePropertyModalProps> = ({
 
           {currentStep === 5 && (
             <div className="wizard-step-content space-y-4">
-              <p className="text-sm text-gray-600">
-                Upload photos of your space. High quality photos significantly increase reservations!
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Upload photos of your space. High quality photos significantly increase reservations!
+                </p>
+                <button
+                  type="button"
+                  onClick={handleLoadDummyPhotos}
+                  className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold rounded-xl border border-rose-200 transition-colors flex items-center gap-1.5 shrink-0"
+                  title="Quickly fill sample dummy photos for testing"
+                >
+                  <Sparkles size={14} className="text-rose-500" />
+                  <span>Fill Sample Photos</span>
+                </button>
+              </div>
 
               <label className="upload-dropzone">
                 <Upload size={32} className="text-rose-500 mb-2" />

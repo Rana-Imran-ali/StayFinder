@@ -66,7 +66,8 @@ export interface CreateBookingPayload {
   guests_count: number;
   has_pet?: boolean;
   special_requests?: string;
-  payment_method?: 'card' | 'wallet' | 'demo';
+  payment_method?: string;
+  payment_intent_id?: string;
 }
 
 export interface HostBookingStats {

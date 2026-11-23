@@ -134,4 +134,9 @@ class Property extends Model
     {
         return $this->hasMany(Booking::class);
     }
+
+    public function reviews(): HasMany
+    {
+        return $this->hasMany(\App\Models\Review::class);
+    }
 }

@@ -15,10 +15,13 @@ import {
   Loader2,
   Lock,
   Globe,
+  Calendar,
+  Building2,
+  DollarSign,
 } from 'lucide-react';
 
 export const AdminManagementView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'identity' | 'hosts' | 'locations' | 'logs'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'identity' | 'hosts' | 'bookings' | 'properties' | 'locations' | 'logs'>('overview');
 
   // Stats & Overview
   const [stats, setStats] = useState<any>(null);
@@ -33,6 +36,12 @@ export const AdminManagementView: React.FC = () => {
   // Verifications Queues
   const [idVerifications, setIdVerifications] = useState<IdentityVerification[]>([]);
   const [hostVerifications, setHostVerifications] = useState<HostVerification[]>([]);
+
+  // Bookings & Properties Oversight
+  const [adminBookings, setAdminBookings] = useState<any[]>([]);
+  const [adminProperties, setAdminProperties] = useState<any[]>([]);
+  const [bookingFilterStatus, setBookingFilterStatus] = useState('');
+  const [propertyFilterStatus, setPropertyFilterStatus] = useState('');
 
   // Audit Logs
   const [allLogs, setAllLogs] = useState<AdminActivityLog[]>([]);
@@ -76,6 +85,20 @@ export const AdminManagementView: React.FC = () => {
         const res = await api.getPendingHostVerifications('pending');
         if (res.data) {
           setHostVerifications(res.data.data);
+        }
+      } else if (activeTab === 'bookings') {
+        const res = await api.getAdminBookings({
+          status: bookingFilterStatus || undefined,
+        });
+        if (res.data) {
+          setAdminBookings(res.data.data);
+        }
+      } else if (activeTab === 'properties') {
+        const res = await api.getAdminProperties({
+          status: propertyFilterStatus || undefined,
+        });
+        if (res.data) {
+          setAdminProperties(res.data.data);
         }
       } else if (activeTab === 'logs') {
         const res = await api.getAdminActivityLogs();
@@ -144,6 +167,22 @@ export const AdminManagementView: React.FC = () => {
     }
   };
 
+  const handleUpdatePropertyStatus = async (id: number, status: string) => {
+    setIsActionLoading(true);
+    try {
+      await api.updateAdminPropertyStatus(id, status);
+      setAdminProperties((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status } : p))
+      );
+      setSuccessMsg(`Property status updated to ${status}!`);
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update property status.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   return (
     <div className="portal-container admin-portal">
       {/* Admin Header */}
@@ -188,6 +227,20 @@ export const AdminManagementView: React.FC = () => {
         >
           <Home size={18} />
           <span>Host Applications</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'bookings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('bookings')}
+        >
+          <Calendar size={18} />
+          <span>All Bookings</span>
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'properties' ? 'active' : ''}`}
+          onClick={() => setActiveTab('properties')}
+        >
+          <Building2 size={18} />
+          <span>Listings</span>
         </button>
         <button
           className={`tab-btn ${activeTab === 'locations' ? 'active' : ''}`}
@@ -242,6 +295,23 @@ export const AdminManagementView: React.FC = () => {
               <h4>Pending Host Verifications</h4>
               <p className="stat-number text-amber">{stats?.pending_host_verifications ?? 0}</p>
               <span className="stat-sub">Awaiting Host Review</span>
+            </div>
+            <div className="stat-card">
+              <h4>Properties</h4>
+              <p className="stat-number">{stats?.total_properties ?? 0}</p>
+              <span className="stat-sub">{stats?.published_properties ?? 0} Published</span>
+            </div>
+            <div className="stat-card">
+              <h4>Reservations</h4>
+              <p className="stat-number">{stats?.total_bookings ?? 0}</p>
+              <span className="stat-sub">{stats?.confirmed_bookings ?? 0} Confirmed</span>
+            </div>
+            <div className="stat-card">
+              <h4 style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <DollarSign size={16} /> Total Revenue
+              </h4>
+              <p className="stat-number">${Number(stats?.total_revenue ?? 0).toLocaleString()}</p>
+              <span className="stat-sub">Platform Bookings Volume</span>
             </div>
           </div>
 
@@ -614,6 +684,157 @@ export const AdminManagementView: React.FC = () => {
                       <td>{log.target_type ? `${log.target_type} #${log.target_id}` : '-'}</td>
                       <td>{log.description}</td>
                       <td><code>{log.ip_address || '127.0.0.1'}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: All Bookings */}
+      {activeTab === 'bookings' && (
+        <div className="card-form">
+          <div className="card-header">
+            <h3>Platform Bookings Overview</h3>
+            <p>Monitor all reservations, payment status, and guest activity</p>
+          </div>
+          <div className="search-filter-bar mb-4" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <select
+              className="filter-select"
+              value={bookingFilterStatus}
+              onChange={(e) => { setBookingFilterStatus(e.target.value); }}
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="completed">Completed</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <button className="btn-secondary btn-sm" onClick={loadData}>Filter</button>
+          </div>
+          {isLoading ? (
+            <div className="text-center py-8"><Loader2 className="spinner" size={28} /></div>
+          ) : (
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Booking Code</th>
+                    <th>Property</th>
+                    <th>Guest</th>
+                    <th>Dates</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Payment</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminBookings.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center py-4 text-muted">No bookings found.</td></tr>
+                  ) : adminBookings.map((booking: any) => (
+                    <tr key={booking.id}>
+                      <td><code>{booking.booking_code}</code></td>
+                      <td>{booking.property?.title || '-'}</td>
+                      <td>
+                        {booking.guest?.name || '-'}<br />
+                        <small className="text-muted">{booking.guest?.email}</small>
+                      </td>
+                      <td>{booking.check_in} → {booking.check_out}</td>
+                      <td><strong>${booking.total_amount}</strong></td>
+                      <td>
+                        <span className={`badge badge-${booking.status === 'confirmed' ? 'success' : booking.status === 'cancelled' ? 'danger' : 'neutral'}`}>
+                          {booking.status}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge badge-${booking.payment_status === 'paid' ? 'success' : 'neutral'}`}>
+                          {booking.payment_status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Property Listings Moderation */}
+      {activeTab === 'properties' && (
+        <div className="card-form">
+          <div className="card-header">
+            <h3>Property Listings Moderation</h3>
+            <p>Review, approve, suspend, or archive property listings</p>
+          </div>
+          <div className="search-filter-bar mb-4" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <select
+              className="filter-select"
+              value={propertyFilterStatus}
+              onChange={(e) => setPropertyFilterStatus(e.target.value)}
+            >
+              <option value="">All Statuses</option>
+              <option value="published">Published</option>
+              <option value="draft">Draft</option>
+              <option value="unlisted">Unlisted</option>
+              <option value="archived">Archived</option>
+            </select>
+            <button className="btn-secondary btn-sm" onClick={loadData}>Filter</button>
+          </div>
+          {isLoading ? (
+            <div className="text-center py-8"><Loader2 className="spinner" size={28} /></div>
+          ) : (
+            <div className="table-responsive">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Property</th>
+                    <th>Host</th>
+                    <th>Location</th>
+                    <th>Price/Night</th>
+                    <th>Bookings</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminProperties.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center py-4 text-muted">No properties found.</td></tr>
+                  ) : adminProperties.map((prop: any) => (
+                    <tr key={prop.id}>
+                      <td>
+                        <strong>{prop.title}</strong><br />
+                        <small className="text-muted">{prop.property_type}</small>
+                      </td>
+                      <td>
+                        {prop.host?.name || '-'}<br />
+                        <small className="text-muted">{prop.host?.is_host_verified ? '✓ Verified' : '⚠ Unverified'}</small>
+                      </td>
+                      <td>{prop.city}, {prop.country}</td>
+                      <td>${prop.price_per_night}</td>
+                      <td>{prop.bookings_count ?? 0}</td>
+                      <td>
+                        <span className={`badge badge-${prop.status === 'published' ? 'success' : prop.status === 'archived' ? 'danger' : 'neutral'}`}>
+                          {prop.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          {prop.status !== 'published' && (
+                            <button className="btn-sm btn-secondary" disabled={isActionLoading} onClick={() => handleUpdatePropertyStatus(prop.id, 'published')}>
+                              Publish
+                            </button>
+                          )}
+                          {prop.status !== 'unlisted' && (
+                            <button className="btn-sm btn-danger" disabled={isActionLoading} onClick={() => handleUpdatePropertyStatus(prop.id, 'unlisted')}>
+                              Suspend
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

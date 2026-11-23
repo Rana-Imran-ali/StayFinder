@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { propertyApi } from '../services/propertyApi';
 import type { Property } from '../types/property';
 import { CreatePropertyModal } from './CreatePropertyModal';
@@ -17,7 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Upload,
-  X
+  X,
+  ShieldAlert,
+  Lock
 } from 'lucide-react';
 
 interface HostPropertyListProps {
@@ -25,6 +28,8 @@ interface HostPropertyListProps {
 }
 
 export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProperty }) => {
+  const { user } = useAuth();
+  const isHostVerified = !!user?.is_host_verified;
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +152,21 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
 
   return (
     <div className="host-property-list-section">
+      {/* Verification Gate Banner */}
+      {!isHostVerified && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-900 flex items-start gap-3.5 shadow-sm">
+          <ShieldAlert className="shrink-0 text-amber-600 mt-0.5" size={22} />
+          <div className="space-y-1">
+            <h4 className="font-bold text-sm text-amber-900">
+              Host Verification Required to Publish Properties
+            </h4>
+            <p className="text-xs text-amber-700 leading-relaxed">
+              To keep StayFinder safe and compliant, all hosts must be verified and approved by an administrator before listing and publishing properties. Visit the <strong>Overview</strong> tab to complete your KYC ID verification and submit your host application.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header with Title and Create Button */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
         <div>
@@ -155,12 +175,22 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
             Manage your listings, adjust visibility, upload photos, and update rates ({totalCount} total)
           </p>
         </div>
-        <button
-          className="btn btn-primary flex items-center gap-2"
-          onClick={() => setIsCreateModalOpen(true)}
-        >
-          <Plus size={18} /> List New Property
-        </button>
+        {isHostVerified ? (
+          <button
+            className="btn btn-primary flex items-center gap-2"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <Plus size={18} /> List New Property
+          </button>
+        ) : (
+          <button
+            className="btn bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed flex items-center gap-2"
+            onClick={() => alert('Host verification is required before you can list properties. Please check your verification status on the Overview tab.')}
+            title="Host verification required"
+          >
+            <Lock size={16} /> Verification Required
+          </button>
+        )}
       </div>
 
       {/* Main Content State */}
@@ -181,12 +211,21 @@ export const HostPropertyList: React.FC<HostPropertyListProps> = ({ onSelectProp
           <p className="text-sm text-gray-500 max-w-md mx-auto mt-1 mb-6">
             Start earning with StayFinder by creating your first listing. Complete the 6-step wizard in under 3 minutes.
           </p>
-          <button
-            className="btn btn-primary inline-flex items-center gap-2"
-            onClick={() => setIsCreateModalOpen(true)}
-          >
-            <Plus size={18} /> Create Your First Listing
-          </button>
+          {isHostVerified ? (
+            <button
+              className="btn btn-primary inline-flex items-center gap-2"
+              onClick={() => setIsCreateModalOpen(true)}
+            >
+              <Plus size={18} /> Create Your First Listing
+            </button>
+          ) : (
+            <button
+              className="btn bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed inline-flex items-center gap-2"
+              onClick={() => alert('Host verification is required before you can list properties. Please check your verification status on the Overview tab.')}
+            >
+              <Lock size={16} /> Verification Required to List
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

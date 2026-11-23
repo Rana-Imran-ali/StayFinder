@@ -17,6 +17,10 @@ use App\Http\Controllers\CountryController;
 use App\Http\Controllers\StateController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\FavoriteController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +65,7 @@ Route::get('/properties', [PropertyController::class, 'index']);
 Route::get('/properties/map', [PropertyController::class, 'mapProperties']);
 Route::get('/properties/{id}/availability', [PropertyAvailabilityController::class, 'index']);
 Route::post('/properties/{id}/check-availability', [PropertyAvailabilityController::class, 'checkAvailability']);
+Route::get('/properties/{id}/reviews', [ReviewController::class, 'index']);
 Route::get('/properties/{slugOrId}', [PropertyController::class, 'show']);
 Route::get('/amenities', [AmenityController::class, 'index']);
 
@@ -108,6 +113,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [BookingController::class, 'store']);
         Route::get('/{id}', [BookingController::class, 'show']);
         Route::post('/{id}/cancel', [BookingController::class, 'cancel']);
+        Route::post('/{id}/review', [ReviewController::class, 'store']);
+    });
+
+    // 4.2 Reviews Module
+    Route::post('/reviews/{id}/host-reply', [ReviewController::class, 'hostReply']);
+
+    // 4.3 Favorites / Wishlist Module
+    Route::get('/favorites', [FavoriteController::class, 'index']);
+    Route::post('/favorites/{propertyId}/toggle', [FavoriteController::class, 'toggle']);
+    Route::get('/favorites/{propertyId}/check', [FavoriteController::class, 'check']);
+
+    // 4.1 Payment Module (Stripe)
+    Route::prefix('payments')->group(function () {
+        Route::get('/config', [PaymentController::class, 'getConfig']);
+        Route::post('/create-intent', [PaymentController::class, 'createPaymentIntent']);
     });
 
     // 4. Host Management Module
@@ -191,6 +211,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/verifications/hosts', [AdminController::class, 'pendingHostVerifications']);
         Route::post('/verifications/hosts/{id}/review', [AdminController::class, 'reviewHostVerification']);
 
+        // Platform Bookings & Properties Oversight
+        Route::get('/bookings', [AdminController::class, 'bookings']);
+        Route::get('/properties', [AdminController::class, 'properties']);
+        Route::put('/properties/{id}/status', [AdminController::class, 'updatePropertyStatus']);
+
         // Audit Logs
         Route::get('/logs', [AdminController::class, 'activityLogs']);
 
@@ -213,3 +238,8 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 });
+
+Route::post('/stripe/webhook', [
+    StripeWebhookController::class,
+    'handle'
+]);

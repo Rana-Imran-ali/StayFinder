@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import type { Property, PropertyImage } from '../types/property';
+import type { Property } from '../types/property';
 import type { PricingBreakdown } from '../types/pricing';
 import type { Booking } from '../types/booking';
 import { pricingApi } from '../services/pricingApi';
 import { useAuth } from '../context/AuthContext';
 import { CheckoutModal } from './CheckoutModal';
+import { PropertyReviews } from './PropertyReviews';
+import { getPropertyGalleryImages, DEFAULT_PROPERTY_FALLBACK } from '../utils/dummyImages';
 import {
   X,
   MapPin,
@@ -28,6 +30,14 @@ interface PropertyDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onReserveSuccess?: (property: Property) => void;
+  onRequireLogin?: () => void;
+  onStartBooking?: (
+    property: Property,
+    checkInDate: string,
+    checkOutDate: string,
+    guestCount: number,
+    hasPet: boolean
+  ) => void;
 }
 
 export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
@@ -35,11 +45,29 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   isOpen,
   onClose,
   onReserveSuccess,
+  onRequireLogin,
+  onStartBooking,
 }) => {
   const { user } = useAuth();
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [checkInDate, setCheckInDate] = useState('');
-  const [checkOutDate, setCheckOutDate] = useState('');
+
+  // Helper for smart default dates (tomorrow -> +3 days)
+  const getDefaultDates = () => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const inDateStr = tomorrow.toISOString().split('T')[0];
+
+    const checkout = new Date(tomorrow);
+    checkout.setDate(tomorrow.getDate() + 3);
+    const outDateStr = checkout.toISOString().split('T')[0];
+
+    return { inDateStr, outDateStr };
+  };
+
+  const initialDates = getDefaultDates();
+  const [checkInDate, setCheckInDate] = useState(initialDates.inDateStr);
+  const [checkOutDate, setCheckOutDate] = useState(initialDates.outDateStr);
   const [guestCount, setGuestCount] = useState(1);
   const [hasPet, setHasPet] = useState(false);
   const [isReserved, setIsReserved] = useState(false);
@@ -50,6 +78,17 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   const [pricingBreakdown, setPricingBreakdown] = useState<PricingBreakdown | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
+  // Reset & reinitialize dates when property opens
+  useEffect(() => {
+    if (isOpen && property) {
+      const { inDateStr, outDateStr } = getDefaultDates();
+      setCheckInDate(inDateStr);
+      setCheckOutDate(outDateStr);
+      setIsReserved(false);
+      setIsCheckoutOpen(false);
+    }
+  }, [isOpen, property?.id]);
 
   // Auto-calculate pricing when dates/guests change
   useEffect(() => {
@@ -109,22 +148,14 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
 
   if (!isOpen || !property) return null;
 
-  // Resolve image list
-  const fallbackImages = [
-    'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=1200&q=80',
-  ];
+  // Resolve rich image list with curated dummy picture gallery
+  const images: string[] = getPropertyGalleryImages(
+    property.images,
+    property.property_type,
+    property.id
+  );
 
-  const images: string[] =
-    property.images && property.images.length > 0
-      ? property.images.map((img: PropertyImage) =>
-        img.image_path.startsWith('http') ? img.image_path : `/storage/${img.image_path}`
-      )
-      : fallbackImages;
-
-  const currentImage = images[selectedImageIndex] || images[0];
+  const currentImage = images[selectedImageIndex] || images[0] || DEFAULT_PROPERTY_FALLBACK;
 
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1));
@@ -149,17 +180,77 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   const baseTotal = nights * Number(property.price_per_night);
   const cleaningFee = Number(property.cleaning_fee) || 0;
 
-  const handleReserve = () => {
+  const handleReserve = async () => {
     if (!user) {
-      alert('Please sign in or create an account to book this stay.');
+      if (onRequireLogin) {
+        onRequireLogin();
+      } else {
+        alert('Please sign in or create an account to book this stay.');
+      }
       return;
     }
     if (!checkInDate || !checkOutDate) {
       setAvailabilityError('Please select both check-in and check-out dates.');
       return;
     }
+
+    if (onStartBooking) {
+      onStartBooking(property, checkInDate, checkOutDate, guestCount, hasPet);
+      return;
+    }
+
     if (!pricingBreakdown) {
-      setAvailabilityError('Please wait for pricing to be calculated.');
+      setCalculating(true);
+      try {
+        const res = await pricingApi.checkAvailability(property.id, {
+          check_in: checkInDate,
+          check_out: checkOutDate,
+          guests: guestCount,
+          has_pet: hasPet,
+        });
+        if (res.success && res.data?.breakdown) {
+          setPricingBreakdown(res.data.breakdown);
+          setIsCheckoutOpen(true);
+        } else {
+          const n = Math.max(1, Math.round((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24)));
+          const base = n * Number(property.price_per_night);
+          const clean = Number(property.cleaning_fee) || 0;
+          setPricingBreakdown({
+            nights: n,
+            base_total: base,
+            cleaning_fee: clean,
+            pet_fee: 0,
+            extra_guest_fee: 0,
+            discount_amount: 0,
+            tax_percent: 0,
+            tax_amount: 0,
+            total: base + clean,
+            currency: property.currency || 'USD',
+            available: true,
+          });
+          setIsCheckoutOpen(true);
+        }
+      } catch {
+        const n = Math.max(1, Math.round((new Date(checkOutDate).getTime() - new Date(checkInDate).getTime()) / (1000 * 60 * 60 * 24)));
+        const base = n * Number(property.price_per_night);
+        const clean = Number(property.cleaning_fee) || 0;
+        setPricingBreakdown({
+          nights: n,
+          base_total: base,
+          cleaning_fee: clean,
+          pet_fee: 0,
+          extra_guest_fee: 0,
+          discount_amount: 0,
+          tax_percent: 0,
+          tax_amount: 0,
+          total: base + clean,
+          currency: property.currency || 'USD',
+          available: true,
+        });
+        setIsCheckoutOpen(true);
+      } finally {
+        setCalculating(false);
+      }
       return;
     }
     setIsCheckoutOpen(true);
@@ -218,8 +309,8 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
             <div className="property-meta-row">
               <div className="rating-pill">
                 <Star size={16} fill="#f59e0b" color="#f59e0b" />
-                <span className="rating-score">4.95</span>
-                <span className="review-count">(28 reviews)</span>
+                <span className="rating-score">{(property as any).avg_rating > 0 ? (property as any).avg_rating : 'New'}</span>
+                <span className="review-count">({(property as any).reviews_count ?? 0} reviews)</span>
               </div>
               <span className="meta-dot">•</span>
               <div className="location-pill">
@@ -248,6 +339,11 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                 src={currentImage}
                 alt={property.title}
                 className="main-gallery-image"
+                onError={(e) => {
+                  if (e.currentTarget.src !== DEFAULT_PROPERTY_FALLBACK) {
+                    e.currentTarget.src = DEFAULT_PROPERTY_FALLBACK;
+                  }
+                }}
               />
               {images.length > 1 && (
                 <>
@@ -281,7 +377,15 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                     className={`thumb-btn ${idx === selectedImageIndex ? 'active' : ''}`}
                     onClick={() => setSelectedImageIndex(idx)}
                   >
-                    <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
+                    <img
+                      src={imgUrl}
+                      alt={`Thumbnail ${idx + 1}`}
+                      onError={(e) => {
+                        if (e.currentTarget.src !== DEFAULT_PROPERTY_FALLBACK) {
+                          e.currentTarget.src = DEFAULT_PROPERTY_FALLBACK;
+                        }
+                      }}
+                    />
                   </button>
                 ))}
               </div>
@@ -389,6 +493,11 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* Guest Reviews & Ratings Section */}
+              <div className="section-block">
+                <PropertyReviews propertyId={property.id} hostId={property.host_id} />
+              </div>
             </div>
 
             {/* Right Column: Reservation Booking Box */}
@@ -401,7 +510,7 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                   </div>
                   <div className="booking-rating">
                     <Star size={14} fill="#f59e0b" color="#f59e0b" />
-                    <span>4.95</span>
+                    <span>{(property as any).avg_rating > 0 ? (property as any).avg_rating : 'New'}</span>
                   </div>
                 </div>
 
@@ -479,12 +588,12 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                   ) : (
                     <>
                       <Sparkles size={18} />
-                      <span>{property.instant_bookable ? 'Instant Reserve' : 'Request to Book'}</span>
+                      <span>Reserve (Add to Wishlist)</span>
                     </>
                   )}
                 </button>
 
-                <p className="charged-notice">You won't be charged yet</p>
+                <p className="charged-notice">You won't be charged yet • Review & book from your Wishlist</p>
 
                 {/* Live Price Breakdown calculation */}
                 <div className="price-breakdown-table">

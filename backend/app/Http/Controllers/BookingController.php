@@ -101,13 +101,14 @@ class BookingController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'property_id'      => ['required', 'integer', 'exists:properties,id'],
-            'check_in'         => ['required', 'date', 'after_or_equal:today'],
-            'check_out'        => ['required', 'date', 'after:check_in'],
-            'guests_count'     => ['required', 'integer', 'min:1'],
-            'has_pet'          => ['boolean'],
-            'special_requests' => ['nullable', 'string', 'max:500'],
-            'payment_method'   => ['nullable', 'string', 'in:card,wallet,demo'],
+            'property_id'       => ['required', 'integer', 'exists:properties,id'],
+            'check_in'          => ['required', 'date', 'after_or_equal:today'],
+            'check_out'         => ['required', 'date', 'after:check_in'],
+            'guests_count'      => ['required', 'integer', 'min:1'],
+            'has_pet'           => ['boolean'],
+            'special_requests'  => ['nullable', 'string', 'max:500'],
+            'payment_method'    => ['nullable', 'string'],
+            'payment_intent_id' => ['nullable', 'string'],
         ]);
 
         $property = Property::findOrFail($data['property_id']);
@@ -176,11 +177,35 @@ class BookingController extends Controller
             ], 422);
         }
 
+        // Verify Stripe PaymentIntent if provided
+        $stripeIntent = null;
+        if (!empty($data['payment_intent_id'])) {
+            $secret = config('services.stripe.secret');
+            if ($secret) {
+                \Stripe\Stripe::setApiKey($secret);
+                try {
+                    $stripeIntent = \Stripe\PaymentIntent::retrieve($data['payment_intent_id']);
+                    if ($stripeIntent->status !== 'succeeded') {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Stripe payment has not succeeded yet (status: ' . $stripeIntent->status . ').',
+                        ], 422);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unable to verify Stripe payment: ' . $e->getMessage(),
+                    ], 422);
+                }
+            }
+        }
+
         // 3. Atomic reservation creation
-        $booking = DB::transaction(function () use ($user, $property, $checkIn, $checkOut, $data, $calc) {
+        $booking = DB::transaction(function () use ($user, $property, $checkIn, $checkOut, $data, $calc, $stripeIntent) {
             $isInstant = (bool) $property->instant_bookable;
-            $status    = $isInstant ? 'confirmed' : 'pending';
-            $payStatus = $isInstant ? 'paid' : 'unpaid';
+            $hasPaid   = $stripeIntent !== null || $isInstant;
+            $status    = ($isInstant || $stripeIntent !== null) ? 'confirmed' : 'pending';
+            $payStatus = $hasPaid ? 'paid' : 'unpaid';
 
             $newBooking = Booking::create([
                 'booking_code'     => Booking::generateBookingCode(),
@@ -207,8 +232,8 @@ class BookingController extends Controller
                 'special_requests' => $data['special_requests'] ?? null,
             ]);
 
-            // If instantly confirmed, block the dates in property_availabilities
-            if ($isInstant) {
+            // If confirmed / paid, block the dates in property_availabilities
+            if ($status === 'confirmed') {
                 $curr = $checkIn->copy();
                 while ($curr->lt($checkOut)) {
                     PropertyAvailability::updateOrCreate(
@@ -223,21 +248,41 @@ class BookingController extends Controller
                 }
 
                 // Log payment transaction
-                BookingTransaction::create([
-                    'booking_id'       => $newBooking->id,
-                    'user_id'          => $user->id,
-                    'transaction_code' => BookingTransaction::generateTransactionCode('CH'),
-                    'type'             => 'charge',
-                    'amount'           => $calc['total'],
-                    'currency'         => $newBooking->currency,
-                    'payment_method'   => $data['payment_method'] ?? 'card',
-                    'payment_gateway'  => 'system',
-                    'status'           => 'successful',
-                    'raw_response'     => [
-                        'auth_code' => strtoupper(\Illuminate\Support\Str::random(6)),
-                        'message'   => 'Payment authorized and charged.',
-                    ],
-                ]);
+                if ($stripeIntent) {
+                    BookingTransaction::create([
+                        'booking_id'       => $newBooking->id,
+                        'user_id'          => $user->id,
+                        'transaction_code' => $stripeIntent->id,
+                        'type'             => 'charge',
+                        'amount'           => ((float) $stripeIntent->amount) / 100,
+                        'currency'         => strtoupper($stripeIntent->currency),
+                        'payment_method'   => 'stripe_card',
+                        'payment_gateway'  => 'stripe',
+                        'status'           => 'successful',
+                        'raw_response'     => [
+                            'payment_intent_id' => $stripeIntent->id,
+                            'status'            => $stripeIntent->status,
+                            'amount'            => $stripeIntent->amount,
+                            'currency'          => $stripeIntent->currency,
+                        ],
+                    ]);
+                } else {
+                    BookingTransaction::create([
+                        'booking_id'       => $newBooking->id,
+                        'user_id'          => $user->id,
+                        'transaction_code' => BookingTransaction::generateTransactionCode('CH'),
+                        'type'             => 'charge',
+                        'amount'           => $calc['total'],
+                        'currency'         => $newBooking->currency,
+                        'payment_method'   => $data['payment_method'] ?? 'card',
+                        'payment_gateway'  => 'system',
+                        'status'           => 'successful',
+                        'raw_response'     => [
+                            'auth_code' => strtoupper(\Illuminate\Support\Str::random(6)),
+                            'message'   => 'Payment authorized and charged.',
+                        ],
+                    ]);
+                }
             }
 
             return $newBooking;
@@ -315,21 +360,48 @@ class BookingController extends Controller
                 'payment_status'      => $booking->payment_status === 'paid' ? 'refunded' : $booking->payment_status,
             ]);
 
-            // Create refund transaction if paid
+            // Create refund transaction if paid (triggering real Stripe refund if paid via Stripe)
             if ($booking->payment_status === 'paid') {
+                $stripeCharge = $booking->transactions()
+                    ->where('payment_gateway', 'stripe')
+                    ->where('type', 'charge')
+                    ->where('status', 'successful')
+                    ->first();
+
+                $refundCode = null;
+                $gateway = 'system';
+                $refundResponse = ['reason' => $data['reason']];
+
+                if ($stripeCharge && str_starts_with($stripeCharge->transaction_code, 'pi_')) {
+                    try {
+                        $stripeSecret = config('services.stripe.secret');
+                        if ($stripeSecret) {
+                            \Stripe\Stripe::setApiKey($stripeSecret);
+                            $stripeRefund = \Stripe\Refund::create([
+                                'payment_intent' => $stripeCharge->transaction_code,
+                                'reason' => 'requested_by_customer',
+                            ]);
+                            $refundCode = $stripeRefund->id;
+                            $gateway = 'stripe';
+                            $refundResponse['stripe_refund_id'] = $stripeRefund->id;
+                            $refundResponse['status'] = $stripeRefund->status;
+                        }
+                    } catch (\Exception $e) {
+                        \Illuminate\Support\Facades\Log::warning('Stripe refund execution warning: ' . $e->getMessage());
+                    }
+                }
+
                 BookingTransaction::create([
                     'booking_id'       => $booking->id,
                     'user_id'          => $booking->guest_id,
-                    'transaction_code' => BookingTransaction::generateTransactionCode('RF'),
+                    'transaction_code' => $refundCode ?? BookingTransaction::generateTransactionCode('RF'),
                     'type'             => 'refund',
                     'amount'           => $booking->total_amount,
                     'currency'         => $booking->currency,
-                    'payment_method'   => 'refund_to_original',
-                    'payment_gateway'  => 'system',
+                    'payment_method'   => $gateway === 'stripe' ? 'stripe_refund' : 'refund_to_original',
+                    'payment_gateway'  => $gateway,
                     'status'           => 'successful',
-                    'raw_response'     => [
-                        'reason' => $data['reason'],
-                    ],
+                    'raw_response'     => $refundResponse,
                 ]);
             }
         });

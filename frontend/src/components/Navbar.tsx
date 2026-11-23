@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Compass, User as UserIcon, LogOut, ShieldCheck, Home, Key, Menu, X, Sparkles, FileCheck, Luggage } from 'lucide-react';
+import { Compass, User as UserIcon, LogOut, ShieldCheck, Home, Key, Menu, X, Sparkles, FileCheck, Luggage, Heart } from 'lucide-react';
 
 interface NavbarProps {
   onOpenLogin: () => void;
@@ -61,6 +61,14 @@ export const Navbar: React.FC<NavbarProps> = ({
               >
                 <Luggage size={18} />
                 <span>My Trips</span>
+              </button>
+
+              <button
+                className={`nav-btn ${currentView === 'wishlist' ? 'active' : ''}`}
+                onClick={() => setCurrentView('wishlist')}
+              >
+                <Heart size={18} />
+                <span>Wishlists</span>
               </button>
 
               <button
@@ -156,6 +164,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     className="dd-item"
                     onClick={() => {
+                      setCurrentView('wishlist');
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <Heart size={16} />
+                    <span>Wishlists</span>
+                  </button>
+                  <button
+                    className="dd-item"
+                    onClick={() => {
                       onOpenIdentityModal();
                       setDropdownOpen(false);
                     }}
@@ -245,6 +263,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 My Trips
+              </button>
+              <button
+                className="mobile-item"
+                onClick={() => {
+                  setCurrentView('wishlist');
+                  setMobileMenuOpen(false);
+                }}
+              >
+                Wishlists
               </button>
               <button
                 className="mobile-item"

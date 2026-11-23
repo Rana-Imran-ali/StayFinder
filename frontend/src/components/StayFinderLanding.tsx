@@ -21,6 +21,7 @@ interface StayFinderLandingProps {
   onOpenRegister: () => void;
   onGoToProfile: () => void;
   onSelectProperty?: (property: Property) => void;
+  onBookNow?: (property: Property) => void;
 }
 
 export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
@@ -28,6 +29,7 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
   onOpenRegister,
   onGoToProfile,
   onSelectProperty,
+  onBookNow,
 }) => {
   const { user, isAuthenticated } = useAuth();
   const [searchLocation, setSearchLocation] = useState('');
@@ -244,6 +246,7 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
                 onSelect={(prop) => {
                   if (onSelectProperty) onSelectProperty(prop);
                 }}
+                onBookNow={onBookNow}
               />
             ))}
           </div>

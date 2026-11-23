@@ -51,6 +51,31 @@ class ApiService {
     return data;
   }
 
+  // Generic HTTP helpers
+  async get<T = any>(endpoint: string, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'GET' });
+  }
+
+  async post<T = any>(endpoint: string, body?: any, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: body instanceof FormData ? body : (body !== undefined ? JSON.stringify(body) : undefined),
+    });
+  }
+
+  async put<T = any>(endpoint: string, body?: any, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: body instanceof FormData ? body : (body !== undefined ? JSON.stringify(body) : undefined),
+    });
+  }
+
+  async delete<T = any>(endpoint: string, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
   // 1. Auth Endpoints
   async register(payload: {
     name: string;
@@ -334,6 +359,41 @@ class ApiService {
     last_page: number;
   }>> {
     return this.request('/admin/logs');
+  }
+
+  async getAdminBookings(params: { search?: string; status?: string; payment_status?: string; page?: number } = {}): Promise<ApiResponse<{
+    data: any[];
+    current_page: number;
+    last_page: number;
+    total: number;
+  }>> {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.status) query.append('status', params.status);
+    if (params.payment_status) query.append('payment_status', params.payment_status);
+    if (params.page) query.append('page', params.page.toString());
+    return this.request(`/admin/bookings?${query.toString()}`);
+  }
+
+  async getAdminProperties(params: { search?: string; status?: string; property_type?: string; page?: number } = {}): Promise<ApiResponse<{
+    data: any[];
+    current_page: number;
+    last_page: number;
+    total: number;
+  }>> {
+    const query = new URLSearchParams();
+    if (params.search) query.append('search', params.search);
+    if (params.status) query.append('status', params.status);
+    if (params.property_type) query.append('property_type', params.property_type);
+    if (params.page) query.append('page', params.page.toString());
+    return this.request(`/admin/properties?${query.toString()}`);
+  }
+
+  async updateAdminPropertyStatus(id: number, status: string, reason?: string): Promise<ApiResponse<any>> {
+    return this.request(`/admin/properties/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, reason }),
+    });
   }
 }
 

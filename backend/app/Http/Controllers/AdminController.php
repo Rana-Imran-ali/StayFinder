@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AdminActivityLog;
+use App\Models\Booking;
 use App\Models\HostProfile;
 use App\Models\HostVerification;
 use App\Models\IdentityVerification;
+use App\Models\Property;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,11 @@ class AdminController extends Controller
             'banned_users' => User::where('status', 'banned')->count(),
             'pending_identity_verifications' => IdentityVerification::where('status', 'pending')->count(),
             'pending_host_verifications' => HostVerification::where('status', 'pending')->count(),
+            'total_properties' => Property::count(),
+            'published_properties' => Property::where('status', 'published')->count(),
+            'total_bookings' => Booking::count(),
+            'confirmed_bookings' => Booking::where('status', 'confirmed')->count(),
+            'total_revenue' => (float) Booking::where('payment_status', 'paid')->sum('total_amount'),
         ];
 
         $recentLogs = AdminActivityLog::with('admin:id,name,email')
@@ -237,6 +244,108 @@ class AdminController extends Controller
         return response()->json([
             'success' => true,
             'data' => $logs,
+        ]);
+    }
+
+    /**
+     * Platform-wide bookings oversight.
+     */
+    public function bookings(Request $request): JsonResponse
+    {
+        $query = Booking::with([
+            'property:id,title,city,country',
+            'guest:id,name,email,phone',
+            'host:id,name,email,phone',
+            'transactions',
+        ]);
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('booking_code', 'like', "%{$search}%")
+                  ->orWhereHas('guest', fn($g) => $g->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))
+                  ->orWhereHas('property', fn($p) => $p->where('title', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($paymentStatus = $request->input('payment_status')) {
+            $query->where('payment_status', $paymentStatus);
+        }
+
+        $bookings = $query->latest()->paginate(15);
+
+        return response()->json([
+            'success' => true,
+            'data' => $bookings,
+        ]);
+    }
+
+    /**
+     * Platform-wide properties oversight.
+     */
+    public function properties(Request $request): JsonResponse
+    {
+        $query = Property::with([
+            'host:id,name,email,is_host_verified',
+            'primaryImage',
+            'images',
+        ])->withCount('bookings');
+
+        if ($search = $request->input('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('city', 'like', "%{$search}%")
+                  ->orWhere('country', 'like', "%{$search}%")
+                  ->orWhereHas('host', fn($h) => $h->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($status = $request->input('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($type = $request->input('property_type')) {
+            $query->where('property_type', $type);
+        }
+
+        $properties = $query->latest()->paginate(15);
+
+        return response()->json([
+            'success' => true,
+            'data' => $properties,
+        ]);
+    }
+
+    /**
+     * Moderate / update property status (Approve, Suspend, Archive).
+     */
+    public function updatePropertyStatus(Request $request, int $id): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:published,draft,unlisted,archived'],
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $property = Property::findOrFail($id);
+        $oldStatus = $property->status;
+        $property->update(['status' => $validated['status']]);
+
+        AdminActivityLog::log(
+            adminId: $request->user()->id,
+            action: 'update_property_status',
+            targetType: 'Property',
+            targetId: $property->id,
+            description: "Changed status of property '{$property->title}' (ID #{$property->id}) from {$oldStatus} to {$validated['status']}. " . ($validated['reason'] ?? ''),
+            ip: $request->ip()
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => "Property status changed to {$validated['status']}.",
+            'data' => $property->fresh(['host', 'primaryImage']),
         ]);
     }
 }
