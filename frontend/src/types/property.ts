@@ -105,6 +105,8 @@ export interface PropertyFilterParams {
   max_price?: number;
   property_type?: string;
   guests?: number;
+  check_in?: string;
+  check_out?: string;
   amenities?: number[];
   page?: number;
   per_page?: number;

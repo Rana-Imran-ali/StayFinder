@@ -38,11 +38,14 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
   const [popularCities, setPopularCities] = useState<City[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
   // Fetch properties whenever filter params change
   useEffect(() => {
-    fetchProperties(filterParams);
+    setCurrentPage(1);
+    fetchProperties({ ...filterParams, page: 1 });
   }, [filterParams]);
 
   // Load popular destinations once
@@ -72,6 +75,23 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
     }
   };
 
+  const handleLoadMore = async () => {
+    const nextPage = currentPage + 1;
+    setLoadingMore(true);
+    try {
+      const res = await propertyApi.getProperties({ ...filterParams, page: nextPage });
+      const newProperties = res.data?.data;
+      if (res.success && newProperties && Array.isArray(newProperties)) {
+        setProperties((prev) => [...prev, ...newProperties]);
+        setCurrentPage(nextPage);
+      }
+    } catch (err) {
+      console.warn('Could not load more properties:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const handleHeroSearchBarSearch = (params: {
     search?: string;
     country_id?: number;
@@ -88,6 +108,8 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
       state_id: params.state_id,
       city_id: params.city_id,
       guests: params.guests,
+      check_in: params.checkIn,
+      check_out: params.checkOut,
       page: 1,
     }));
   };
@@ -238,18 +260,40 @@ export const StayFinderLanding: React.FC<StayFinderLandingProps> = ({
             />
           </div>
         ) : properties.length > 0 ? (
-          <div className="stays-grid">
-            {properties.map((property) => (
-              <PropertyCard
-                key={property.id}
-                property={property}
-                onSelect={(prop) => {
-                  if (onSelectProperty) onSelectProperty(prop);
-                }}
-                onBookNow={onBookNow}
-              />
-            ))}
-          </div>
+          <>
+            <div className="stays-grid">
+              {properties.map((property) => (
+                <PropertyCard
+                  key={property.id}
+                  property={property}
+                  onSelect={(prop) => {
+                    if (onSelectProperty) onSelectProperty(prop);
+                  }}
+                  onBookNow={onBookNow}
+                />
+              ))}
+            </div>
+
+            {properties.length < totalCount && (
+              <div className="text-center pt-8 pb-4">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="px-6 py-3 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 font-bold text-xs rounded-2xl shadow-sm transition-all hover:shadow-md disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin text-rose-500" />
+                      <span>Loading more stays...</span>
+                    </>
+                  ) : (
+                    <span>Show more stays ({totalCount - properties.length} remaining)</span>
+                  )}
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-gray-200 p-8 max-w-xl mx-auto my-8">
             <Building2 size={48} className="mx-auto text-gray-300 mb-3" />

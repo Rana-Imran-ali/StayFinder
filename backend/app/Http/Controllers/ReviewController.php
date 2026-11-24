@@ -33,8 +33,19 @@ class ReviewController extends Controller
 
         $booking = Booking::where('id', $bookingId)
             ->where('guest_id', $user->id)
-            ->where('status', 'completed')
+            ->where(function ($q) {
+                $q->where('status', 'completed')
+                  ->orWhere(function ($sub) {
+                      $sub->whereIn('status', ['confirmed', 'paid'])
+                          ->where('check_out_date', '<=', now()->toDateString());
+                  });
+            })
             ->firstOrFail();
+
+        // Mark as completed if it was confirmed/paid
+        if ($booking->status !== 'completed') {
+            $booking->update(['status' => 'completed']);
+        }
 
         // One review per booking
         if (Review::where('booking_id', $booking->id)->exists()) {

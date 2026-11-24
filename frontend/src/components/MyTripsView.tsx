@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { Booking } from '../types/booking';
 import { bookingApi } from '../services/bookingApi';
 import { BookingDetailsModal } from './BookingDetailsModal';
+import { WriteReviewModal } from './WriteReviewModal';
+import { BookingReceiptModal } from './BookingReceiptModal';
+import { ChatModal } from './ChatModal';
 import {
   Luggage,
   Calendar,
@@ -10,6 +13,9 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  Printer,
+  MessageSquare,
+  Star,
 } from 'lucide-react';
 
 interface MyTripsViewProps {
@@ -24,6 +30,9 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({ onExploreStays }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [lastPage, setLastPage] = useState(1);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
+  const [receiptBooking, setReceiptBooking] = useState<Booking | null>(null);
+  const [chatInfo, setChatInfo] = useState<{ propertyId: number; bookingId?: number } | null>(null);
 
   const fetchTrips = useCallback(async (tab: 'upcoming' | 'past' | 'cancelled' | 'all', page: number) => {
     setLoading(true);
@@ -204,9 +213,45 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({ onExploreStays }) => {
                       </span>
                     </div>
 
-                    <span className="text-xs font-bold text-rose-600 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                      View Voucher <ChevronRight size={14} />
-                    </span>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {booking.property && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (booking.property) {
+                              setChatInfo({ propertyId: booking.property.id, bookingId: booking.id });
+                            }
+                          }}
+                          title="Message Host"
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setReceiptBooking(booking)}
+                        title="Download / Print Receipt"
+                        className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                      >
+                        <Printer size={14} />
+                      </button>
+
+                      {(booking.status === 'completed' || new Date(booking.check_out) <= new Date()) && booking.status !== 'cancelled' && (
+                        <button
+                          type="button"
+                          onClick={() => setReviewBooking(booking)}
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                        >
+                          <Star size={11} fill="currentColor" /> Review
+                        </button>
+                      )}
+
+                      <span className="text-xs font-bold text-rose-600 flex items-center gap-0.5 ml-1">
+                        Voucher <ChevronRight size={13} />
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -240,7 +285,37 @@ export const MyTripsView: React.FC<MyTripsViewProps> = ({ onExploreStays }) => {
         isOpen={!!selectedBooking}
         onClose={() => setSelectedBooking(null)}
         onBookingCancelled={handleBookingCancelled}
+        onOpenReceipt={(b) => setReceiptBooking(b)}
+        onOpenChat={(propId, bookId) => setChatInfo({ propertyId: propId, bookingId: bookId })}
+        onOpenReview={(b) => setReviewBooking(b)}
       />
+
+      {/* Write Review Modal */}
+      <WriteReviewModal
+        booking={reviewBooking}
+        isOpen={!!reviewBooking}
+        onClose={() => setReviewBooking(null)}
+        onReviewSubmitted={() => {
+          fetchTrips(activeTab, currentPage);
+        }}
+      />
+
+      {/* Official Printable Receipt Modal */}
+      <BookingReceiptModal
+        booking={receiptBooking}
+        isOpen={!!receiptBooking}
+        onClose={() => setReceiptBooking(null)}
+      />
+
+      {/* Direct Host Chat Modal */}
+      {chatInfo && (
+        <ChatModal
+          propertyId={chatInfo.propertyId}
+          bookingId={chatInfo.bookingId}
+          isOpen={!!chatInfo}
+          onClose={() => setChatInfo(null)}
+        />
+      )}
     </div>
   );
 };

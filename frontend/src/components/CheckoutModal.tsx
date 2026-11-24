@@ -166,7 +166,6 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onSuccess,
 }) => {
   const [specialRequests, setSpecialRequests] = useState('');
-  const [paymentMode, setPaymentMode] = useState<'stripe' | 'demo'>('stripe');
   const [agreedToRules, setAgreedToRules] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,10 +189,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         // 1. Get publishable key
         let pubKey = import.meta.env.VITE_STRIPE_PUBLIC_KEY;
         if (!pubKey) {
-          const cfg = await paymentApi.getConfig();
-          if (cfg.success && cfg.data?.publishable_key) {
-            pubKey = cfg.data.publishable_key;
-          }
+          const cfg: any = await paymentApi.getConfig();
+          pubKey = cfg.publishable_key || cfg.data?.publishable_key;
         }
 
         if (pubKey) {
@@ -201,7 +198,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         }
 
         // 2. Create PaymentIntent on backend
-        const intentRes = await paymentApi.createPaymentIntent({
+        const intentRes: any = await paymentApi.createPaymentIntent({
           property_id: property.id,
           check_in: checkInDate,
           check_out: checkOutDate,
@@ -211,16 +208,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
         if (!isMounted) return;
 
-        if (intentRes.success && intentRes.data?.client_secret) {
-          setClientSecret(intentRes.data.client_secret);
+        const secret = intentRes.client_secret || intentRes.data?.client_secret;
+        if (secret) {
+          setClientSecret(secret);
         } else {
-          // If Stripe intent failed, fall back gracefully to demo option
-          setPaymentMode('demo');
+          setError(intentRes.message || 'Unable to initialize Stripe payment. Please check your credentials.');
         }
       } catch (err: any) {
-        console.warn('Could not initialize Stripe intent:', err);
+        console.error('Could not initialize Stripe intent:', err);
         if (isMounted) {
-          setPaymentMode('demo');
+          setError(err.message || 'Could not connect to Stripe payment gateway. Please check your connection.');
         }
       } finally {
         if (isMounted) setLoadingIntent(false);
@@ -236,39 +233,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Demo fallback booking handler
-  const handleDemoBooking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agreedToRules) {
-      setError('Please agree to the ground rules and cancellation policy to proceed.');
-      return;
-    }
 
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      const res = await bookingApi.createBooking({
-        property_id: property.id,
-        check_in: checkInDate,
-        check_out: checkOutDate,
-        guests_count: guestCount,
-        has_pet: hasPet,
-        special_requests: specialRequests || undefined,
-        payment_method: 'demo',
-      });
-
-      if (res.success && res.data) {
-        setCompletedBooking(res.data);
-      } else {
-        setError(res.message || 'Unable to complete reservation.');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to complete booking. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   // Resolve cover image with resilient dummy fallback
   const rawCoverImage = property.images && property.images.length > 0
@@ -410,91 +375,47 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               {/* Payment Mode Selector */}
               <div className="pt-4 border-t border-slate-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900">Payment method</h3>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMode('stripe')}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                        paymentMode === 'stripe'
-                          ? 'bg-rose-100 text-rose-700 border border-rose-300'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      Credit Card (Stripe)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMode('demo')}
-                      className={`text-xs px-2.5 py-1 rounded-lg font-semibold transition-colors ${
-                        paymentMode === 'demo'
-                          ? 'bg-rose-100 text-rose-700 border border-rose-300'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      Instant Demo
-                    </button>
-                  </div>
+                  <h3 className="text-base font-bold text-slate-900">Payment details</h3>
+                  <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <ShieldCheck size={12} /> Stripe Protected
+                  </span>
                 </div>
 
                 {/* Stripe Elements Form */}
-                {paymentMode === 'stripe' ? (
-                  loadingIntent ? (
-                    <div className="p-8 border border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-500">
-                      <Loader2 size={24} className="animate-spin text-rose-500" />
-                      <span className="text-xs font-semibold">Connecting to Stripe secure gateway...</span>
-                    </div>
-                  ) : stripePromise && clientSecret ? (
-                    <div className="space-y-3">
-                      <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
-                        <div className="flex items-center gap-2">
-                          <Lock size={13} className="text-blue-600 shrink-0" />
-                          <span><strong>Stripe Card Test:</strong> Use <code className="bg-blue-100 px-1 py-0.5 rounded font-mono">4242 •••• •••• 4242</code></span>
-                        </div>
-                        <span className="text-[11px] text-blue-600 font-medium">Any future Exp & 3-digit CVC</span>
+                {loadingIntent ? (
+                  <div className="p-8 border border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-2 text-slate-500">
+                    <Loader2 size={24} className="animate-spin text-rose-500" />
+                    <span className="text-xs font-semibold">Connecting to Stripe secure gateway...</span>
+                  </div>
+                ) : stripePromise && clientSecret ? (
+                  <div className="space-y-3">
+                    <div className="p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
+                      <div className="flex items-center gap-2">
+                        <Lock size={13} className="text-blue-600 shrink-0" />
+                        <span><strong>Enter your card credentials below:</strong></span>
                       </div>
-                      <Elements stripe={stripePromise} options={{ clientSecret }}>
-                        <StripeCardForm
-                          property={property}
-                          checkInDate={checkInDate}
-                          checkOutDate={checkOutDate}
-                          guestCount={guestCount}
-                          hasPet={hasPet}
-                          specialRequests={specialRequests}
-                          agreedToRules={agreedToRules}
-                          submitting={submitting}
-                          setSubmitting={setSubmitting}
-                          setError={setError}
-                          onBookingCreated={setCompletedBooking}
-                        />
-                      </Elements>
+                      <span className="text-[11px] text-blue-600 font-medium">Stripe SSL 256-Bit</span>
                     </div>
-                  ) : (
-                    <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-xs">
-                      Unable to initialize Stripe card form. Please use the "Instant Demo" option to book.
-                    </div>
-                  )
+                    <Elements stripe={stripePromise} options={{ clientSecret }}>
+                      <StripeCardForm
+                        property={property}
+                        checkInDate={checkInDate}
+                        checkOutDate={checkOutDate}
+                        guestCount={guestCount}
+                        hasPet={hasPet}
+                        specialRequests={specialRequests}
+                        agreedToRules={agreedToRules}
+                        submitting={submitting}
+                        setSubmitting={setSubmitting}
+                        setError={setError}
+                        onBookingCreated={setCompletedBooking}
+                      />
+                    </Elements>
+                  </div>
                 ) : (
-                  /* Demo payment option */
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
-                    <p className="text-xs text-slate-600">
-                      Test instant booking authorization without charging real payment credentials.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleDemoBooking}
-                      disabled={submitting}
-                      className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 size={16} className="animate-spin" />
-                          <span>Confirming reservation...</span>
-                        </>
-                      ) : (
-                        <span>Confirm Instant Booking (Demo)</span>
-                      )}
-                    </button>
+                  <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs space-y-2">
+                    <p className="font-semibold">Unable to load Stripe payment form.</p>
+                    <p>{error || 'Please check your connection and try again.'}</p>
                   </div>
                 )}
               </div>

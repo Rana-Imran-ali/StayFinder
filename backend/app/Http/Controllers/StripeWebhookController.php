@@ -29,8 +29,12 @@ class StripeWebhookController extends Controller
                 ]);
                 return response('Invalid signature', 400);
             }
+        } elseif (app()->environment('production')) {
+            // Security requirement: In production, webhook secret is strictly required
+            Log::error('Stripe webhook rejected: STRIPE_WEBHOOK_SECRET must be configured in production.');
+            return response('Webhook signature secret required in production', 403);
         } else {
-            // In dev mode without webhook secret configured, parse payload directly
+            // In local development mode without webhook secret configured, parse payload with strict validation
             $data = json_decode($payload, true);
             if (!$data || !isset($data['type'])) {
                 return response('Invalid payload', 400);
@@ -131,6 +135,12 @@ class StripeWebhookController extends Controller
             });
 
             Log::info("Booking {$booking->booking_code} marked as PAID and CONFIRMED via Stripe Webhook");
+        } else {
+            // Webhook arrived before frontend completed bookingApi.createBooking()
+            Log::info("Stripe PaymentIntent {$intentId} received before booking record exists. Synchronous API will finalize transaction with anti-replay protection.", [
+                'metadata' => $intent->metadata ?? null,
+                'amount'   => $intent->amount ?? null,
+            ]);
         }
     }
 

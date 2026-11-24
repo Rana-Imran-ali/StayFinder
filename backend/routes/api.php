@@ -21,6 +21,8 @@ use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\FavoriteController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -68,6 +70,7 @@ Route::post('/properties/{id}/check-availability', [PropertyAvailabilityControll
 Route::get('/properties/{id}/reviews', [ReviewController::class, 'index']);
 Route::get('/properties/{slugOrId}', [PropertyController::class, 'show']);
 Route::get('/amenities', [AmenityController::class, 'index']);
+Route::get('/payments/config', [PaymentController::class, 'getConfig']);
 
 /*
 |--------------------------------------------------------------------------
@@ -124,9 +127,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/favorites/{propertyId}/toggle', [FavoriteController::class, 'toggle']);
     Route::get('/favorites/{propertyId}/check', [FavoriteController::class, 'check']);
 
+    // 4.4 In-App Messaging Module
+    Route::get('/conversations', [MessageController::class, 'index']);
+    Route::post('/conversations/start', [MessageController::class, 'start']);
+    Route::get('/conversations/{id}', [MessageController::class, 'show']);
+    Route::post('/conversations/{id}/messages', [MessageController::class, 'sendMessage']);
+    Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
+
+    // 4.5 In-App Notifications Module
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+
     // 4.1 Payment Module (Stripe)
     Route::prefix('payments')->group(function () {
-        Route::get('/config', [PaymentController::class, 'getConfig']);
         Route::post('/create-intent', [PaymentController::class, 'createPaymentIntent']);
     });
 

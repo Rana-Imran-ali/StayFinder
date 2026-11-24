@@ -1,6 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Compass, User as UserIcon, LogOut, ShieldCheck, Home, Key, Menu, X, Sparkles, FileCheck, Luggage, Heart } from 'lucide-react';
+import { messageApi } from '../services/messageApi';
+import { notificationApi } from '../services/notificationApi';
+import type { AppNotificationItem } from '../services/notificationApi';
+import {
+  Compass,
+  User as UserIcon,
+  LogOut,
+  ShieldCheck,
+  Home,
+  Key,
+  Menu,
+  X,
+  Sparkles,
+  FileCheck,
+  Luggage,
+  Heart,
+  MessageSquare,
+  Bell,
+} from 'lucide-react';
 
 interface NavbarProps {
   onOpenLogin: () => void;
@@ -22,6 +40,34 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { user, isAuthenticated, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [notifications, setNotifications] = useState<AppNotificationItem[]>([]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const checkCounts = async () => {
+      const [msgCount, notifRes] = await Promise.all([
+        messageApi.getUnreadCount(),
+        notificationApi.getNotifications().catch(() => ({ data: [], unread_count: 0 })),
+      ]);
+      setUnreadMsgCount(msgCount);
+      setUnreadNotifCount(notifRes.unread_count);
+      setNotifications(notifRes.data);
+    };
+
+    checkCounts();
+    const interval = setInterval(checkCounts, 10000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const handleMarkAllNotifsRead = async () => {
+    await notificationApi.markAllAsRead();
+    setUnreadNotifCount(0);
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
 
   const isHost = user?.roles?.some((r) => r.slug === 'host');
   const isAdmin = user?.roles?.some((r) => r.slug === 'admin');
@@ -72,6 +118,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
+                className={`nav-btn ${currentView === 'messages' ? 'active' : ''}`}
+                onClick={() => setCurrentView('messages')}
+                style={{ position: 'relative' }}
+              >
+                <MessageSquare size={18} />
+                <span>Messages</span>
+                {unreadMsgCount > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      right: '6px',
+                      background: '#FF385C',
+                      color: '#fff',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      padding: '1px 5px',
+                    }}
+                  >
+                    {unreadMsgCount}
+                  </span>
+                )}
+              </button>
+
+              <button
                 className={`nav-btn ${currentView === 'profile' ? 'active' : ''}`}
                 onClick={() => setCurrentView('profile')}
               >
@@ -111,9 +183,111 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
 
         {/* Right Actions & Auth */}
-        <div className="nav-actions">
+        <div className="nav-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           {isAuthenticated && user ? (
-            <div className="user-profile-menu">
+            <>
+              {/* Notification Bell */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(!notificationsOpen);
+                    setDropdownOpen(false);
+                  }}
+                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-full transition-colors"
+                  style={{ position: 'relative' }}
+                  title="Notifications"
+                >
+                  <Bell size={20} />
+                  {unreadNotifCount > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '2px',
+                        right: '2px',
+                        background: '#FF385C',
+                        color: '#fff',
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        borderRadius: '10px',
+                        padding: '1px 4px',
+                        minWidth: '15px',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Popover */}
+                {notificationsOpen && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: '110%',
+                      width: '320px',
+                      background: '#fff',
+                      borderRadius: '16px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                      border: '1px solid #f0f0f0',
+                      zIndex: 100,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>Notifications</span>
+                      {unreadNotifCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleMarkAllNotifsRead}
+                          style={{ fontSize: '0.72rem', color: '#FF385C', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                      {notifications.length === 0 ? (
+                        <div style={{ padding: '2rem 1rem', textAlign: 'center', color: '#999', fontSize: '0.8rem' }}>
+                          No notifications yet
+                        </div>
+                      ) : (
+                        notifications.map((notif) => (
+                          <div
+                            key={notif.id}
+                            style={{
+                              padding: '0.75rem 1rem',
+                              borderBottom: '1px solid #f8f8f8',
+                              background: notif.is_read ? '#fff' : '#fff5f7',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              if (notif.action_url) {
+                                if (notif.action_url.includes('trips')) setCurrentView('trips');
+                                else if (notif.action_url.includes('messages')) setCurrentView('messages');
+                                else if (notif.action_url.includes('reservations') || notif.action_url.includes('host')) setCurrentView('host-portal');
+                              }
+                              setNotificationsOpen(false);
+                            }}
+                          >
+                            <p style={{ fontSize: '0.78rem', fontWeight: notif.is_read ? 600 : 700, color: '#1e293b', marginBottom: '2px' }}>
+                              {notif.title}
+                            </p>
+                            <p style={{ fontSize: '0.72rem', color: '#64748b', lineHeight: 1.4 }}>
+                              {notif.message}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="user-profile-menu">
               <button
                 className="profile-chip"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -174,6 +348,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     className="dd-item"
                     onClick={() => {
+                      setCurrentView('messages');
+                      setDropdownOpen(false);
+                    }}
+                  >
+                    <MessageSquare size={16} />
+                    <span>Messages</span>
+                    {unreadMsgCount > 0 && (
+                      <span className="ml-auto text-[10px] bg-rose-600 text-white font-bold px-1.5 py-0.2 rounded-full">
+                        {unreadMsgCount}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    className="dd-item"
+                    onClick={() => {
                       onOpenIdentityModal();
                       setDropdownOpen(false);
                     }}
@@ -220,6 +409,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </div>
               )}
             </div>
+          </>
           ) : (
             <div className="auth-buttons">
               <button className="btn-secondary" onClick={onOpenLogin}>
@@ -272,6 +462,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }}
               >
                 Wishlists
+              </button>
+              <button
+                className="mobile-item"
+                onClick={() => {
+                  setCurrentView('messages');
+                  setMobileMenuOpen(false);
+                }}
+              >
+                Messages {unreadMsgCount > 0 ? `(${unreadMsgCount})` : ''}
               </button>
               <button
                 className="mobile-item"

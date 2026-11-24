@@ -14,6 +14,8 @@ import { MyTripsView } from './components/MyTripsView';
 import { WishlistView } from './components/WishlistView';
 import { BookingPageView } from './components/BookingPageView';
 import { PropertyDetailsModal } from './components/PropertyDetailsModal';
+import { MessagesView } from './components/MessagesView';
+import { ChatModal } from './components/ChatModal';
 import { favoritesApi } from './services/favoritesApi';
 import type { Property } from './types/property';
 import './App.css';
@@ -39,6 +41,7 @@ const MainContent: React.FC = () => {
   const [isForgotOpen, setIsForgotOpen] = useState(false);
   const [isIdentityModalOpen, setIsIdentityModalOpen] = useState(false);
   const [isHostOnboardingOpen, setIsHostOnboardingOpen] = useState(false);
+  const [chatPropertyId, setChatPropertyId] = useState<number | null>(null);
 
   // Property details modal state
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -110,6 +113,8 @@ const MainContent: React.FC = () => {
         setCurrentView('trips');
       } else if (hash === 'wishlist' || hash === 'saved') {
         setCurrentView('wishlist');
+      } else if (hash === 'messages' || hash === 'inbox') {
+        setCurrentView('messages');
       } else if (hash === 'profile') {
         setCurrentView('profile');
       } else if (hash === 'host' || hash === 'host-portal') {
@@ -180,6 +185,10 @@ const MainContent: React.FC = () => {
           />
         )}
 
+        {currentView === 'messages' && isAuthenticated && (
+          <MessagesView onExploreStays={() => setCurrentView('explore')} />
+        )}
+
         {currentView === 'host-portal' && isAuthenticated && (
           <HostDashboardView
             onOpenIdentityModal={() => setIsIdentityModalOpen(true)}
@@ -239,6 +248,7 @@ const MainContent: React.FC = () => {
         isOpen={isPropertyDetailsOpen}
         onClose={() => setIsPropertyDetailsOpen(false)}
         onRequireLogin={() => setIsLoginOpen(true)}
+        onContactHost={(propId) => setChatPropertyId(propId)}
         onStartBooking={(prop) => {
           setIsPropertyDetailsOpen(false);
           handleAddToWishlist(prop);
@@ -246,6 +256,17 @@ const MainContent: React.FC = () => {
         onReserveSuccess={() => {
           setIsPropertyDetailsOpen(false);
           setCurrentView('wishlist');
+        }}
+      />
+
+      {/* Direct Host Chat Modal */}
+      <ChatModal
+        propertyId={chatPropertyId ?? undefined}
+        isOpen={!!chatPropertyId}
+        onClose={() => setChatPropertyId(null)}
+        onOpenFullInbox={() => {
+          setChatPropertyId(null);
+          setCurrentView('messages');
         }}
       />
     </div>

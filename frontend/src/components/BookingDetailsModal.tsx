@@ -12,6 +12,9 @@ import {
   Receipt,
   AlertTriangle,
   Loader2,
+  Printer,
+  MessageSquare,
+  Star,
 } from 'lucide-react';
 
 interface BookingDetailsModalProps {
@@ -19,6 +22,9 @@ interface BookingDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBookingCancelled?: (updated: Booking) => void;
+  onOpenReceipt?: (booking: Booking) => void;
+  onOpenChat?: (propertyId: number, bookingId: number) => void;
+  onOpenReview?: (booking: Booking) => void;
 }
 
 export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
@@ -26,6 +32,9 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
   isOpen,
   onClose,
   onBookingCancelled,
+  onOpenReceipt,
+  onOpenChat,
+  onOpenReview,
 }) => {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelPrompt, setShowCancelPrompt] = useState(false);
@@ -306,7 +315,48 @@ export const BookingDetailsModal: React.FC<BookingDetailsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            {onOpenReceipt && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenReceipt(booking);
+                }}
+                className="px-3.5 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+              >
+                <Printer size={13} /> Official Receipt
+              </button>
+            )}
+
+            {onOpenChat && property && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenChat(property.id, booking.id);
+                }}
+                className="px-3.5 py-2 border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
+              >
+                <MessageSquare size={13} className="text-rose-500" /> Message Host
+              </button>
+            )}
+
+            {onOpenReview && (booking.status === 'completed' || new Date(booking.check_out) <= new Date()) && booking.status !== 'cancelled' && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenReview(booking);
+                }}
+                className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Star size={13} fill="currentColor" /> Write Review
+              </button>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onClose}

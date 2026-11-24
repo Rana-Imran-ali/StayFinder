@@ -22,9 +22,13 @@ class PaymentController extends Controller
      */
     public function getConfig(): JsonResponse
     {
+        $key = config('services.stripe.key');
         return response()->json([
             'success'         => true,
-            'publishable_key' => config('services.stripe.key'),
+            'publishable_key' => $key,
+            'data'            => [
+                'publishable_key' => $key,
+            ],
         ]);
     }
 
@@ -119,6 +123,13 @@ class PaymentController extends Controller
                 'amount'            => $calc['total'],
                 'currency'          => strtoupper($currency),
                 'breakdown'         => $calc,
+                'data'              => [
+                    'client_secret'     => $intent->client_secret,
+                    'payment_intent_id' => $intent->id,
+                    'amount'            => $calc['total'],
+                    'currency'          => strtoupper($currency),
+                    'breakdown'         => $calc,
+                ],
             ]);
         } catch (\Exception $e) {
             return response()->json([

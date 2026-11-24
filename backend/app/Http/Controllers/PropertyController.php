@@ -109,6 +109,36 @@ class PropertyController extends Controller
             $query->where('max_guests', '>=', (int)$guests);
         }
 
+        // 7b. Date Availability Filtering (exclude properties booked or blocked during this window)
+        if ($request->filled(['check_in', 'check_out'])) {
+            $checkIn = $request->input('check_in');
+            $checkOut = $request->input('check_out');
+
+            if ($checkIn < $checkOut) {
+                // Exclude properties with overlapping active bookings
+                $query->whereDoesntHave('bookings', function ($bQuery) use ($checkIn, $checkOut) {
+                    $bQuery->whereIn('status', ['confirmed', 'paid', 'pending'])
+                        ->where(function ($q) use ($checkIn, $checkOut) {
+                            $q->whereBetween('check_in_date', [$checkIn, $checkOut])
+                              ->orWhereBetween('check_out_date', [$checkIn, $checkOut])
+                              ->orWhere(function ($sub) use ($checkIn, $checkOut) {
+                                  $sub->where('check_in_date', '<=', $checkIn)
+                                      ->where('check_out_date', '>=', $checkOut);
+                              });
+                        })
+                        ->where('check_in_date', '!=', $checkOut)
+                        ->where('check_out_date', '!=', $checkIn);
+                });
+
+                // Exclude properties with blocked availability
+                $query->whereDoesntHave('availabilities', function ($aQuery) use ($checkIn, $checkOut) {
+                    $aQuery->where('is_available', false)
+                        ->where('date', '>=', $checkIn)
+                        ->where('date', '<', $checkOut);
+                });
+            }
+        }
+
         // 8. Amenities Filter
         if ($amenityIds = $request->input('amenities')) {
             $ids = is_array($amenityIds) ? $amenityIds : explode(',', $amenityIds);

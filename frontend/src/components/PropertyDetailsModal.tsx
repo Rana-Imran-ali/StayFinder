@@ -23,6 +23,7 @@ import {
   Share2,
   Loader2,
   AlertCircle,
+  MessageSquare,
 } from 'lucide-react';
 
 interface PropertyDetailsModalProps {
@@ -31,6 +32,7 @@ interface PropertyDetailsModalProps {
   onClose: () => void;
   onReserveSuccess?: (property: Property) => void;
   onRequireLogin?: () => void;
+  onContactHost?: (propertyId: number) => void;
   onStartBooking?: (
     property: Property,
     checkInDate: string,
@@ -46,6 +48,7 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
   onClose,
   onReserveSuccess,
   onRequireLogin,
+  onContactHost,
   onStartBooking,
 }) => {
   const { user } = useAuth();
@@ -442,8 +445,25 @@ export const PropertyDetailsModal: React.FC<PropertyDetailsModalProps> = ({
                       </div>
                     )}
                   </div>
-                  <div className="host-info-text">
-                    <h3>Hosted by {property.host.name}</h3>
+                  <div className="host-info-text" style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h3>Hosted by {property.host.name}</h3>
+                      {onContactHost && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!user) {
+                              if (onRequireLogin) onRequireLogin();
+                              return;
+                            }
+                            onContactHost(property.id);
+                          }}
+                          className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold rounded-xl border border-rose-200 flex items-center gap-1.5 transition-colors"
+                        >
+                          <MessageSquare size={13} /> Contact Host
+                        </button>
+                      )}
+                    </div>
                     <p>
                       Superhost • Fast response time (within an hour) • Verified identity
                     </p>
